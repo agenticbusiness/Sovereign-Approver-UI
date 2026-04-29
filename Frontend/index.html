@@ -74,6 +74,7 @@ body{font-family:'Inter',sans-serif;background:var(--hull-base);color:var(--text
 <div class="navbar">
   <div class="brand"><div class="dot"></div><span>TLS Approver</span></div>
   <div class="toolbar-controls">
+    <input type="text" id="backend-url" class="doc-select" style="min-width:180px;" value="http://127.0.0.1:8100" placeholder="Backend URL">
     <select class="doc-select" id="doc-select" onchange="loadDocument(this.value)">
       <option value="">Select Cutout...</option>
     </select>
@@ -106,21 +107,37 @@ body{font-family:'Inter',sans-serif;background:var(--hull-base);color:var(--text
 let currentDoc = '';
 let docList = [];
 
+function getBaseUrl() {
+  let url = document.getElementById('backend-url').value.trim();
+  if(url.endsWith('/')) url = url.slice(0, -1);
+  return window.location.hostname.includes('github.io') ? url : '';
+}
+
 // ── Zoom & Pan State ──
 let scale = 0.75;
 let panX = 0, panY = 0;
 let isPanning = false;
 let panStartX = 0, panStartY = 0;
+let dragCounter = 0;
 
 const viewport = document.getElementById('viewport');
 const imgContainer = document.getElementById('img-container');
 const dropzone = document.getElementById('dropzone');
 
 // Drag and Drop
-window.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('active'); });
-window.addEventListener('dragleave', (e) => { if(e.target === dropzone) dropzone.classList.remove('active'); });
+window.addEventListener('dragenter', (e) => { 
+  e.preventDefault(); 
+  dragCounter++; 
+  dropzone.classList.add('active'); 
+});
+window.addEventListener('dragleave', (e) => { 
+  dragCounter--; 
+  if(dragCounter === 0) dropzone.classList.remove('active'); 
+});
+window.addEventListener('dragover', (e) => { e.preventDefault(); });
 window.addEventListener('drop', async (e) => {
   e.preventDefault();
+  dragCounter = 0;
   dropzone.classList.remove('active');
   const files = e.dataTransfer.files;
   if(files.length > 0) {
@@ -128,15 +145,16 @@ window.addEventListener('drop', async (e) => {
     const formData = new FormData();
     formData.append('file', files[0]);
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch(`${getBaseUrl()}/api/upload`, { method: 'POST', body: formData });
       if(res.ok) {
-        showToast('✅ File parsed successfully!', 'green');
-        init(); // reload documents
+        showToast('✅ File sent to active extraction pipeline!', 'green');
+        setTimeout(init, 2000); // Wait 2s for backend to process then reload
       } else {
         showToast('✗ Parsing failed', 'red');
       }
     } catch (err) {
-      showToast('✗ Upload error', 'red');
+      showToast('✗ Upload error: Check Backend Connection', 'red');
+      console.error(err);
     }
   }
 });
@@ -191,7 +209,7 @@ function resetZoom() {
 // ── Data Loading ──
 async function init() {
   try {
-    const res = await fetch('/api/documents');
+    const res = await fetch(`${getBaseUrl()}/api/documents`);
     docList = await res.json();
     const sel = document.getElementById('doc-select');
     sel.innerHTML = '<option value="">Select Cutout...</option>';
@@ -216,12 +234,12 @@ async function loadDocument(id) {
   resetZoom();
   
   try {
-    const res = await fetch(`/api/document/${id}/data`);
+    const res = await fetch(`${getBaseUrl()}/api/document/${id}/data`);
     const data = await res.json();
     
     // Set Image
     const img = document.getElementById('crop-image');
-    img.src = `/api/page/${id}/1`;
+    img.src = `${getBaseUrl()}/api/page/${id}/1`;
     img.style.display = 'block';
     
     // Render Sidebar
@@ -313,7 +331,7 @@ async function loadDocument(id) {
 // ── Approve / Reject ──
 async function approveCurrent() {
   if(!currentDoc) return;
-  await fetch('/api/approve', {
+  await fetch(`${getBaseUrl()}/api/approve`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({doc_id: currentDoc, status: 'approved'})
   });
@@ -323,7 +341,7 @@ async function approveCurrent() {
 
 async function rejectCurrent() {
   if(!currentDoc) return;
-  await fetch('/api/reject', {
+  await fetch(`${getBaseUrl()}/api/reject`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({doc_id: currentDoc, status: 'rejected'})
   });
