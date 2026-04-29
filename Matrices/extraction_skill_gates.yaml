@@ -1,0 +1,99 @@
+# ═══════════════════════════════════════════════════════════════
+# Extraction Skill Gates — Zero-Reject Protocol
+# Harsh execution gates for the Sovereign Spec Validation pipeline.
+# Referenced by judge_orchestrator.py and preflight_verifier.py.
+# ═══════════════════════════════════════════════════════════════
+
+# ═══ MANDATORY PROTOCOL RULES ═══
+# These are NOT optional. Violation is a pipeline failure.
+mandatory_rules:
+  bbox_burn_in:
+    enabled: true
+    rule: "Every pipeline run MUST produce BOTH the JSON spatial record AND burned-in PNGs."
+    rationale: "~0.02s/page overhead. JSON is the machine-readable record. Burned PNGs are the human-readable proof. Both are required."
+    outputs_required:
+      - "parsed_spatial_data.json"    # Machine record with all match/score/flag data
+      - "pages/<N>.png"               # Clean page render (unmodified)
+      - "pages/<N>_marked.png"        # Annotated page with color-coded bounding boxes
+    enforcement: "judge_orchestrator.py calls bbox_burn_in.burn_document() after EVERY consensus write. Skip = pipeline failure."
+
+
+# Gate 1: Count Parity — ALL extraction sources must agree on count
+count_parity:
+  enabled: true
+  threshold: 0  # Zero tolerance for count mismatches
+  sources:
+    - llm_vision        # Gemini Vision on rendered page image
+    - tesseract         # OCR on rendered image
+    - pymupdf           # get_text("dict") embedded text
+  rules:
+    - name: "vision_vs_tesseract_parity"
+      check: "llm_vision_count == tesseract_count"
+      severity: "critical"
+      action_on_fail: "re_extract_page_at_300dpi"
+    - name: "graphic_text_detection"
+      check: "llm_vision_count > pymupdf_count"
+      severity: "info"
+      note: "Delta = graphic-rendered text invisible to get_text()"
+    - name: "hallucination_check"
+      check: "tesseract_count > llm_vision_count"
+      severity: "warning"
+      action_on_fail: "trust_tesseract_review_delta"
+
+# Gate 2: BBox Coverage — Every truth must have a spatial anchor
+bbox_coverage:
+  enabled: true
+  threshold_percent: 95  # 95% of expected truths must have bboxes
+  check: "Every part number in expected_truths.json MUST have a bbox from at least 1 engine"
+  action_on_fail: "flag_missing_bboxes_for_review"
+
+# Gate 3: Spatial Consistency — All bboxes must align to columns
+spatial_consistency:
+  enabled: true
+  column_tolerance_px: 15  # Max x-drift from column centroid
+  row_height_z_score_max: 2.0  # Max z-score for bbox height outliers
+  rules:
+    - name: "column_alignment"
+      check: "bbox.x within column_cluster ± tolerance"
+      action_on_fail: "recalculate_columns_from_tesseract"
+    - name: "row_height_uniformity"
+      check: "bbox.height z-score <= max"
+      action_on_fail: "flag_dimension_outlier"
+    - name: "no_significant_overlap"
+      check: "No two bboxes overlap > 50% by area"
+      action_on_fail: "dedup_overlapping"
+
+# Gate 4: Zero-Reject Final — The hard stop
+zero_reject:
+  enabled: true
+  threshold_percent: 100  # ALL matches must pass
+  pre_conditions:
+    - "count_parity.passed == true"
+    - "bbox_coverage.passed == true"
+    - "spatial_consistency.passed == true"
+  check: |
+    After all engines + pre-flight verifier:
+    - 0 red-flagged matches (score < 50)
+    - 0 missing truths (every expected PN has a bbox)
+    - Count parity achieved across all sources
+  action_on_pass: "auto_approve_entire_page"
+  action_on_fail: "escalate_to_human_review"
+
+# Auto-Approve Thresholds
+auto_approve:
+  page_level:
+    min_score: 90  # Minimum preflight score for auto-approve
+    require_count_parity: true
+  match_level:
+    min_score: 90  # Individual match auto-approve threshold
+    min_engines: 2  # At least 2 engines must agree
+
+# Re-Extraction Protocol
+re_extraction:
+  enabled: true
+  triggers:
+    - "count_parity_failed"
+    - "bbox_coverage_below_threshold"
+  higher_dpi: 300
+  max_retries: 1
+  note: "Only re-extracts the specific failing page, not the whole document"

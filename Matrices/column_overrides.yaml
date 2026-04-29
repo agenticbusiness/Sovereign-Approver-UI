@@ -1,0 +1,12 @@
+# Column Overrides — Per-document column boundary corrections
+# Auto-updated by feedback_manager.py from rejection notes
+# Format:
+#   "<doc_id>":
+#     target_columns: ["BLACK", "GALVANIZED"]
+#     exclude_columns: ["SIZE", "INNER", "MASTER"]
+#     page_overrides:
+#       2:
+#         target_x_ranges:
+#           - column: "BLACK"
+#             x_left: 300
+#             x_right: 420

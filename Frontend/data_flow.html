@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sovereign Pipeline - Data Flow Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<style>
+:root {
+  --hull-base:#0a0c10;--hull-panel:#11141a;--hull-elevated:#181c25;
+  --steel-border:#2a3040;--steel-bright:#3d4558;
+  --text-primary:#e8ecf2;--text-secondary:#8893a7;--text-muted:#4e5a72;
+  --signal-cyan:#00d4ff;--signal-green:#00e68a;--signal-amber:#ffb84d;--signal-red:#ff4d6a;
+}
+* {margin:0;padding:0;box-sizing:border-box;}
+body {font-family:'Inter',sans-serif;background:var(--hull-base);color:var(--text-primary);min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;}
+
+/* Navbar */
+.navbar {background:var(--hull-panel);border-bottom:1px solid var(--steel-border);padding:12px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);}
+.brand {display:flex;align-items:center;gap:12px;}
+.brand .dot {width:8px;height:8px;border-radius:50%;background:var(--signal-cyan);box-shadow:0 0 8px var(--signal-cyan);}
+.brand span {font-size:0.85rem;letter-spacing:3px;text-transform:uppercase;font-weight:600;color:var(--text-secondary);}
+.nav-links {display:flex;gap:16px;}
+.nav-link {color:var(--text-secondary);text-decoration:none;font-size:0.75rem;text-transform:uppercase;letter-spacing:1px;padding:6px 12px;border-radius:4px;border:1px solid transparent;transition:all 0.2s;}
+.nav-link:hover {color:var(--signal-cyan);border-color:var(--steel-border);background:var(--hull-elevated);}
+
+/* Container */
+.container {padding:40px;width:100%;max-width:1600px;margin:0 auto;flex:1;display:flex;flex-direction:column;}
+.header-area {margin-bottom:40px;display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--steel-border);padding-bottom:16px;}
+.header-area h1 {font-size:1.8rem;font-weight:600;color:#fff;}
+.header-area p {color:var(--signal-cyan);font-family:'JetBrains Mono', monospace;font-size:0.8rem;}
+
+.submit-btn {
+  background:var(--signal-cyan);
+  color:#000;
+  border:none;
+  padding:10px 20px;
+  border-radius:4px;
+  font-weight:700;
+  cursor:pointer;
+  font-family:'Inter',sans-serif;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  font-size:0.8rem;
+  transition:all 0.2s;
+  box-shadow:0 0 15px rgba(0,212,255,0.2);
+}
+.submit-btn:hover { background:#33ddff; transform:translateY(-1px); box-shadow:0 0 25px rgba(0,212,255,0.4); }
+.submit-btn:disabled { background:var(--text-muted); box-shadow:none; cursor:not-allowed; }
+
+.sync-status {
+  background:var(--hull-elevated);
+  border:1px solid var(--signal-green);
+  color:var(--signal-green);
+  padding:6px 12px;
+  border-radius:20px;
+  font-size:0.7rem;
+  font-family:'JetBrains Mono', monospace;
+  display:inline-flex;align-items:center;gap:6px;
+  margin-bottom:20px;
+}
+.sync-dot {width:6px;height:6px;border-radius:50%;background:var(--signal-green);animation:pulse 2s infinite;}
+@keyframes pulse { 0%{opacity:1;} 50%{opacity:0.3;} 100%{opacity:1;} }
+
+.nav-btn { background:var(--hull-elevated); color:#fff; border:1px solid var(--steel-border); border-radius:4px; cursor:pointer; padding:4px 8px; font-weight:bold; }
+.nav-btn:hover { background:var(--steel-border); }
+.catalog-icon { text-decoration:none; margin-left:6px; filter:grayscale(100%); transition:all 0.2s; }
+.catalog-icon:hover { filter:grayscale(0%); }
+
+/* Vertical Flow Stack */
+.flow-stack {display:flex;flex-direction:column;gap:60px;}
+
+.phase-row {
+  display:flex;
+  gap:40px;
+  align-items:stretch;
+  position:relative;
+}
+.phase-row:not(:last-child)::after {
+  content:'↓';
+  position:absolute;
+  bottom:-45px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:2rem;
+  color:var(--steel-bright);
+}
+
+/* Left Side - YAML Form */
+.form-panel {
+  flex:1;
+  background:var(--hull-panel);
+  border:1px solid var(--steel-border);
+  border-radius:8px;
+  padding:24px;
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+.fp-header {display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--steel-border);padding-bottom:12px;}
+.fp-title {font-weight:600;font-size:1.1rem;color:#fff;}
+.fp-badge {background:var(--hull-elevated);border:1px solid var(--signal-cyan);color:var(--signal-cyan);font-family:'JetBrains Mono',monospace;font-size:0.75rem;padding:4px 8px;border-radius:4px;}
+
+.fp-field {display:flex;flex-direction:column;gap:6px;}
+.fp-label {font-size:0.7rem;text-transform:uppercase;color:var(--text-muted);letter-spacing:1px;}
+.fp-input {
+  background:var(--hull-base);
+  border:1px solid var(--steel-border);
+  color:var(--signal-green);
+  font-family:'JetBrains Mono',monospace;
+  font-size:0.8rem;
+  padding:8px 12px;
+  border-radius:4px;
+  width:100%;
+}
+.fp-input:focus {outline:none;border-color:var(--signal-cyan);}
+.fp-input.opt {color:var(--signal-amber);}
+.fp-desc {color:var(--text-secondary);font-size:0.85rem;}
+
+/* Right Side - Visualizer */
+.visual-panel {
+  flex:1;
+  background:var(--hull-elevated);
+  border:1px dashed var(--steel-bright);
+  border-radius:8px;
+  position:relative;
+  overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  min-height:400px;
+  padding:20px;
+}
+.vp-label {
+  position:absolute;
+  top:12px;left:12px;
+  background:rgba(0,0,0,0.8);
+  color:#fff;
+  padding:4px 8px;
+  border-radius:4px;
+  font-size:0.7rem;
+  font-family:'JetBrains Mono',monospace;
+  z-index:10;
+  border:1px solid var(--steel-border);
+}
+
+.vp-data {
+  width:100%;
+  height:100%;
+  background:var(--hull-base);
+  color:var(--text-primary);
+  font-family:'JetBrains Mono',monospace;
+  font-size:0.75rem;
+  padding:16px;
+  border-radius:4px;
+  border:1px solid var(--steel-border);
+  overflow-y:auto;
+  white-space:pre-wrap;
+  display:none; /* Shown via JS */
+}
+
+.vp-image-wrap {
+  position:relative;
+  width:80%;
+  height:90%;
+  border:1px solid var(--steel-border);
+  background:#fff;
+  display:none; /* Shown via JS */
+}
+.vp-image {
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+
+/* Snipping Tool & Annotator Styles */
+#snip-overlay {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.5); z-index: 9999; cursor: crosshair; display: none;
+}
+#snip-box {
+    position: absolute; border: 2px dashed var(--signal-cyan);
+    background: rgba(0, 212, 255, 0.1); display: none; pointer-events: none;
+}
+#annotator-modal {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.8); z-index: 10000; display: none;
+    align-items: center; justify-content: center;
+}
+.annotator-content {
+    background: var(--hull-panel); border: 1px solid var(--steel-border);
+    border-radius: 8px; padding: 20px; display: flex; flex-direction: column; gap: 16px;
+    max-width: 90vw; max-height: 90vh;
+}
+.canvas-container {
+    overflow: auto; border: 1px solid var(--steel-bright); position: relative;
+}
+#annotator-canvas {
+    cursor: crosshair;
+}
+.annotator-controls {
+    display: flex; gap: 12px;
+}
+.annotator-notes {
+    background: var(--hull-base); color: var(--text-primary); border: 1px solid var(--steel-border);
+    padding: 8px; border-radius: 4px; width: 100%; min-height: 60px; font-family: 'Inter', sans-serif;
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+<div class="navbar">
+    <div class="brand"><div class="dot"></div><span>Sovereign Pipeline UI</span></div>
+    <div class="nav-links">
+        <a href="index.html" class="nav-link">TLS Spec Validation</a>
+        <a href="#" class="nav-link" style="color:var(--signal-cyan);border-color:var(--steel-border);">Data Flow Dashboard</a>
+        <a href="inference_files.html" class="nav-link">Inference Files</a>
+        <a href="parse_to_copy.html" class="nav-link">Parse to Copy</a>
+    </div>
+</div>
+
+<div class="container">
+    <div class="header-area" style="margin-bottom:20px; padding-bottom:16px;">
+        <div>
+            <h1>Data Flow Engine & Gate Corrector</h1>
+            <p>pipeline_gates.yaml &mdash; Lazy-Execution & Phase 0 Integration</p>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-end;">
+            <button class="submit-btn" style="background:var(--signal-amber);color:#000;" onclick="startSnipping()">Screenshot</button>
+            <button id="btn-run" class="submit-btn" style="background:var(--hull-elevated);color:var(--signal-green);border:1px solid var(--signal-green);" onclick="runPipelineForPage()">Run Pipeline on Current Page</button>
+            <button class="submit-btn" onclick="submitCorrections()">Submit Gate Corrections</button>
+        </div>
+    </div>
+
+    <!-- Static Menu Bar (Shared with TLS UI) -->
+    <div style="background:var(--hull-panel); border:1px solid var(--steel-border); border-radius:6px; padding:12px 16px; display:flex; align-items:center; gap:16px; margin-bottom:30px;">
+        <select id="doc-select" onchange="changeDocument(this.value)" style="background:var(--hull-base);color:var(--text-primary);border:1px solid var(--steel-border);border-radius:3px;padding:6px 10px;font-size:0.8rem;font-family:'Inter',sans-serif;min-width:300px;">
+            <option value="">Select Document...</option>
+        </select>
+        
+        <div style="width:1px;height:24px;background:var(--steel-border);"></div>
+        
+        <div class="page-controls" id="page-controls" style="display:flex; align-items:center; gap:8px;">
+            <button class="nav-btn" onclick="changePage(-1)">←</button>
+            <input type="text" id="df-page-input" style="width:40px;text-align:center;background:var(--hull-base);color:var(--text-primary);border:1px solid var(--steel-border);border-radius:3px;padding:6px;font-size:0.8rem;font-family:'JetBrains Mono',monospace;" value="1" onchange="goToPage()">
+            <span style="color:var(--text-secondary);font-size:0.8rem;font-family:'JetBrains Mono',monospace;">/ <span id="df-total-pages">--</span></span>
+            <button class="nav-btn" onclick="changePage(1)">→</button>
+        </div>
+        
+        <div style="width:1px;height:24px;background:var(--steel-border);"></div>
+        
+        <div class="sync-status" id="sync-status" style="margin-bottom:0; border:none; background:transparent;">
+            <div class="sync-dot" style="background:var(--signal-amber)"></div>
+            <span style="color:var(--text-secondary)">No document synced.</span>
+        </div>
+    </div>
+
+    <div class="flow-stack" id="flow-stack">
+        <!-- Rows injected via JS -->
+    </div>
+</div>
+
+<!-- Snipping Tool Overlay -->
+<div id="snip-overlay">
+    <div id="snip-box"></div>
+</div>
+
+<!-- Annotator Modal -->
+<div id="annotator-modal">
+    <div class="annotator-content">
+        <h3 style="color:#fff;">Annotate Screenshot</h3>
+        <p style="color:var(--text-secondary);font-size:0.8rem;">Draw bounding boxes on the image. Add notes below.</p>
+        <div class="canvas-container">
+            <canvas id="annotator-canvas"></canvas>
+        </div>
+        <textarea id="annotator-notes" class="annotator-notes" placeholder="Enter notes or rejection reason..."></textarea>
+        <div class="annotator-controls">
+            <button class="submit-btn" style="background:var(--steel-bright);" onclick="closeAnnotator()">Cancel</button>
+            <button class="submit-btn" onclick="submitScreenshot()">Submit Screen Shot</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let originalGates = {};
+let syncedDoc = localStorage.getItem('sovereign_sync_doc');
+let syncedPage = localStorage.getItem('sovereign_sync_page');
+let syncedTotalPages = localStorage.getItem('sovereign_sync_total_pages');
+const catalogUrl = "https://fileos-hasm.github.io/Sovereign-Visual-Catalog-UI/";
+let manifestDocs = [];
+
+// Listen for sync changes
+window.addEventListener('storage', (e) => {
+    if (e.key === 'sovereign_sync_doc') syncedDoc = e.newValue;
+    if (e.key === 'sovereign_sync_page') syncedPage = e.newValue;
+    if (e.key === 'sovereign_sync_total_pages') syncedTotalPages = e.newValue;
+    updateSyncUI();
+});
+
+async function boot() {
+    const s=document.getElementById('doc-select');
+    const isLocal = location.hostname==='127.0.0.1'||location.hostname==='localhost';
+    try {
+        if(isLocal){
+            const r=await fetch('/api/documents');const docs=await r.json();
+            manifestDocs=docs;
+            docs.forEach(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=d.id+' ('+d.pages+'p)';s.appendChild(o)});
+        }else{
+            const r=await fetch('_2 Output Data/manifest.json');const docs=await r.json();
+            manifestDocs=docs;
+            docs.forEach(d=>{const o=document.createElement('option');o.value=d.id;o.textContent=d.id;s.appendChild(o)});
+        }
+    
+    // COR-003: Cross-tab session persistence — read before clearing
+    const savedDoc = localStorage.getItem('sovereign_sync_doc');
+    const savedPage = localStorage.getItem('sovereign_sync_page');
+    const savedTotal = localStorage.getItem('sovereign_sync_total_pages');
+    if (savedDoc && manifestDocs.some(d => d.id === savedDoc)) {
+        // Active session from another tab — resume it
+        syncedDoc = savedDoc;
+        syncedPage = savedPage || '1';
+        syncedTotalPages = savedTotal || '1';
+        s.value = savedDoc;
+    } else {
+        // No active session — clean boot
+        localStorage.removeItem('sovereign_sync_doc');
+        localStorage.removeItem('sovereign_sync_page');
+        localStorage.removeItem('sovereign_sync_total_pages');
+        syncedDoc = null;
+        syncedPage = null;
+        syncedTotalPages = null;
+    }
+    
+    // Initial UI state
+    updateSyncUI();
+    } catch(e) { console.error("Could not load documents", e); }
+    
+    await loadGates();
+}
+
+async function loadGates() {
+    try {
+        const response = await fetch('pipeline_gates.yaml');
+        if (!response.ok) throw new Error("pipeline_gates.yaml not found");
+        const yamlText = await response.text();
+        const data = jsyaml.load(yamlText);
+        originalGates = data;
+        
+        const stack = document.getElementById('flow-stack');
+        let index = 0;
+        
+        for (const [key, gate] of Object.entries(data.gates)) {
+            const num = index; // 0-indexed now due to Phase 0
+            
+            let vpContent = `
+                <div class="vp-label">OUTPUT VIEW</div>
+                <div class="vp-image-wrap" id="vp-img-wrap-${num}">
+                    <img class="vp-image" id="vp-img-${num}" src="" alt="Image">
+                </div>
+                <div class="vp-data" id="vp-data-${num}"></div>
+            `;
+
+            const row = `
+                <div class="phase-row">
+                    <div class="form-panel">
+                        <div class="fp-header">
+                            <div class="fp-title">${gate.name}</div>
+                            <div class="fp-badge">${key}</div>
+                        </div>
+                        <div class="fp-desc">${gate.description}</div>
+                        
+                        <div class="fp-field">
+                            <div class="fp-label">Protocol <a href="${catalogUrl}" target="_blank" class="catalog-icon" title="View in Catalog">🔗</a></div>
+                            <input type="text" class="fp-input" id="inp-prot-${key}" value="${gate.protocol}">
+                        </div>
+                        <div class="fp-field">
+                            <div class="fp-label">Optimization Workflow <a href="${catalogUrl}" target="_blank" class="catalog-icon" title="View in Catalog">🔗</a></div>
+                            <input type="text" class="fp-input opt" id="inp-opt-${key}" value="${gate.optimization_workflow}">
+                        </div>
+                        <div class="fp-field">
+                            <div class="fp-label">Input <a href="${catalogUrl}" target="_blank" class="catalog-icon" title="View in Catalog">🔗</a></div>
+                            <input type="text" class="fp-input" id="inp-in-${key}" value="${gate.input}">
+                        </div>
+                        <div class="fp-field">
+                            <div class="fp-label">Output <a href="${catalogUrl}" target="_blank" class="catalog-icon" title="View in Catalog">🔗</a></div>
+                            <input type="text" class="fp-input" id="inp-out-${key}" value="${gate.output}">
+                        </div>
+                    </div>
+                    
+                    <div class="visual-panel">
+                        ${vpContent}
+                    </div>
+                </div>
+            `;
+            stack.insertAdjacentHTML('beforeend', row);
+            index++;
+        }
+        
+        updateSyncUI();
+        
+    } catch (e) {
+        console.error(e);
+        document.getElementById('flow-stack').innerHTML = `<p style="color:var(--signal-red);">Error loading pipeline_gates.yaml</p>`;
+    }
+}
+
+async function updateSyncUI() {
+    const status = document.getElementById('sync-status');
+    const s = document.getElementById('doc-select');
+    
+    if (syncedDoc && syncedPage) {
+        if (s.value !== syncedDoc) s.value = syncedDoc;
+        status.innerHTML = `<div class="sync-dot" style="background:var(--signal-green)"></div><span style="color:var(--signal-green)">Synced Active</span>`;
+        document.getElementById('df-page-input').value = syncedPage;
+        document.getElementById('df-total-pages').textContent = syncedTotalPages || '--';
+        await fetchDataForCurrentPage();
+    } else {
+        status.innerHTML = `<div class="sync-dot" style="background:var(--signal-amber)"></div><span style="color:var(--text-secondary)">No document synced.</span>`;
+        document.getElementById('df-total-pages').textContent = '--';
+    }
+}
+
+async function changeDocument(docId) {
+    if(!docId) return;
+    syncedDoc = docId;
+    syncedPage = '1';
+    
+    const docInfo = manifestDocs.find(d => d.id === docId);
+    syncedTotalPages = docInfo ? docInfo.pages.toString() : '1';
+    
+    localStorage.setItem('sovereign_sync_doc', syncedDoc);
+    localStorage.setItem('sovereign_sync_page', syncedPage);
+    localStorage.setItem('sovereign_sync_total_pages', syncedTotalPages);
+    updateSyncUI();
+}
+
+function changePage(delta) {
+    if (!syncedPage || !syncedTotalPages) return;
+    let newPage = parseInt(syncedPage) + delta;
+    if (newPage >= 1 && newPage <= parseInt(syncedTotalPages)) {
+        syncedPage = newPage.toString();
+        localStorage.setItem('sovereign_sync_page', syncedPage);
+        updateSyncUI();
+    }
+}
+
+function goToPage() {
+    if (!syncedTotalPages) return;
+    let newPage = parseInt(document.getElementById('df-page-input').value);
+    if (newPage >= 1 && newPage <= parseInt(syncedTotalPages)) {
+        syncedPage = newPage.toString();
+        localStorage.setItem('sovereign_sync_page', syncedPage);
+        updateSyncUI();
+    } else {
+        document.getElementById('df-page-input').value = syncedPage;
+    }
+}
+
+async function fetchDataForCurrentPage() {
+    if (!syncedDoc || !syncedPage) return;
+    
+    // 1. Fetch JSON/YAML data from the new endpoint
+    try {
+        const res = await fetch(`/api/get_output_data/${encodeURIComponent(syncedDoc)}/${syncedPage}`);
+        const apiData = await res.json();
+        
+        // Phase 0: Raw Image — uses /api/page/ for PyMuPDF live-render fallback (COR-001)
+        const imgUrl = `/api/page/${encodeURIComponent(syncedDoc)}/${syncedPage}`;
+        const imgWrap0 = document.getElementById('vp-img-wrap-0');
+        const img0 = document.getElementById('vp-img-0');
+        if (imgWrap0) {
+            imgWrap0.style.display = 'block';
+            document.getElementById('vp-data-0').style.display = 'none';
+            img0.src = imgUrl;
+            img0.style.filter = 'grayscale(100%) opacity(80%)';
+        }
+        
+        // Phase 1: Truths
+        const p1 = document.getElementById('vp-data-1');
+        if (p1) {
+            p1.style.display = 'block';
+            p1.textContent = apiData.expected_truths ? JSON.stringify(apiData.expected_truths, null, 2) : "No Truth Data Extracted Yet.";
+        }
+        
+        // Phase 2: Document Intelligence
+        const p2 = document.getElementById('vp-data-2');
+        if (p2) {
+            p2.style.display = 'block';
+            p2.textContent = apiData.document_intelligence ? jsyaml.dump(apiData.document_intelligence) : "No Intelligence Data Extracted Yet.";
+            p2.style.color = "var(--signal-cyan)";
+        }
+        
+        // Phase 3: Engine Data
+        const p3 = document.getElementById('vp-data-3');
+        if (p3) {
+            p3.style.display = 'block';
+            p3.textContent = apiData.engine_data ? JSON.stringify(apiData.engine_data, null, 2) : "No Extraction Engine Data Yet.";
+        }
+        
+        // Phase 4: Consensus
+        const p4 = document.getElementById('vp-data-4');
+        if (p4) {
+            p4.style.display = 'block';
+            p4.textContent = apiData.consensus ? JSON.stringify(apiData.consensus, null, 2) : "No Judge Consensus Data Yet.";
+        }
+        
+        // Phase 5: Final Static Output — uses same /api/page/ route (COR-001)
+        const imgWrap5 = document.getElementById('vp-img-wrap-5');
+        const img5 = document.getElementById('vp-img-5');
+        if (imgWrap5) {
+            imgWrap5.style.display = 'block';
+            document.getElementById('vp-data-5').style.display = 'none';
+            img5.src = imgUrl;
+            img5.style.filter = 'none'; // Has bounding boxes
+        }
+        
+    } catch (e) {
+        console.error("Failed to fetch data:", e);
+    }
+}
+
+async function runPipelineForPage() {
+    if (!syncedDoc || !syncedPage) {
+        alert("Please sync a document and page first.");
+        return;
+    }
+    
+    const btn = document.getElementById('btn-run');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "Processing Page... This takes ~20s";
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/run_pipeline_page', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({doc_id: syncedDoc, page_num: parseInt(syncedPage)})
+        });
+        
+        const result = await res.json();
+        if (result.success) {
+            await fetchDataForCurrentPage();
+        } else {
+            alert("Pipeline Failed: " + result.error);
+        }
+    } catch (e) {
+        alert("Request failed: " + e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function submitCorrections() {
+    if (!originalGates || !originalGates.gates) return;
+    
+    let corrected = JSON.parse(JSON.stringify(originalGates));
+    
+    for (const key of Object.keys(corrected.gates)) {
+        corrected.gates[key].protocol = document.getElementById(`inp-prot-${key}`).value;
+        corrected.gates[key].optimization_workflow = document.getElementById(`inp-opt-${key}`).value;
+        corrected.gates[key].input = document.getElementById(`inp-in-${key}`).value;
+        corrected.gates[key].output = document.getElementById(`inp-out-${key}`).value;
+    }
+    
+    try {
+        const res = await fetch('/api/submit_gates_correction', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(corrected)
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+            alert("SUCCESS: " + result.message);
+        } else {
+            alert("ERROR: " + result.error);
+        }
+    } catch (e) {
+        alert("Request failed: " + e.message);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', boot);
+
+setInterval(() => {
+    const d = localStorage.getItem('sovereign_sync_doc');
+    const p = localStorage.getItem('sovereign_sync_page');
+    const t = localStorage.getItem('sovereign_sync_total_pages');
+    if (d !== syncedDoc || p !== syncedPage || t !== syncedTotalPages) {
+        syncedDoc = d; 
+        syncedPage = p;
+        syncedTotalPages = t;
+        updateSyncUI();
+    }
+}, 1000);
+
+// --- Screenshot / Whole Page Capture Logic ---
+async function startSnipping() {
+    const btn = document.querySelector('button[onclick="startSnipping()"]');
+    const ogText = btn.innerHTML;
+    btn.innerHTML = 'Capturing...';
+    btn.disabled = true;
+    try {
+        const canvas = await html2canvas(document.body, {
+            useCORS: true,
+            windowWidth: document.body.scrollWidth,
+            windowHeight: document.body.scrollHeight
+        });
+        openAnnotatorModal(canvas.toDataURL('image/png'));
+    } catch (err) {
+        console.error("Screenshot failed:", err);
+        alert("Failed to capture screenshot.");
+    } finally {
+        btn.innerHTML = ogText;
+        btn.disabled = false;
+    }
+}
+
+const annotatorModal = document.getElementById('annotator-modal');
+const annoCanvas = document.getElementById('annotator-canvas');
+const annoCtx = annoCanvas.getContext('2d');
+let annoImage = null;
+let isDrawing = false;
+let drawStartX, drawStartY;
+let annotations = []; // Store bounding boxes
+
+function openAnnotatorModal(dataUrl) {
+    annotatorModal.style.display = 'flex';
+    document.getElementById('annotator-notes').value = '';
+    annotations = [];
+    
+    annoImage = new Image();
+    annoImage.onload = () => {
+        annoCanvas.width = annoImage.width;
+        annoCanvas.height = annoImage.height;
+        redrawCanvas();
+    };
+    annoImage.src = dataUrl;
+}
+
+function closeAnnotator() {
+    annotatorModal.style.display = 'none';
+}
+
+function redrawCanvas() {
+    if (!annoImage) return;
+    annoCtx.clearRect(0, 0, annoCanvas.width, annoCanvas.height);
+    annoCtx.drawImage(annoImage, 0, 0);
+    annoCtx.strokeStyle = 'red';
+    annoCtx.lineWidth = 3;
+    annotations.forEach(box => {
+        annoCtx.strokeRect(box.x, box.y, box.w, box.h);
+    });
+}
+
+annoCanvas.addEventListener('mousedown', (e) => {
+    isDrawing = true;
+    const rect = annoCanvas.getBoundingClientRect();
+    drawStartX = e.clientX - rect.left;
+    drawStartY = e.clientY - rect.top;
+});
+
+annoCanvas.addEventListener('mousemove', (e) => {
+    if (!isDrawing) return;
+    const rect = annoCanvas.getBoundingClientRect();
+    const currentX = e.clientX - rect.left;
+    const currentY = e.clientY - rect.top;
+    
+    redrawCanvas();
+    annoCtx.strokeStyle = 'red';
+    annoCtx.lineWidth = 3;
+    annoCtx.strokeRect(drawStartX, drawStartY, currentX - drawStartX, currentY - drawStartY);
+});
+
+annoCanvas.addEventListener('mouseup', (e) => {
+    if (!isDrawing) return;
+    isDrawing = false;
+    const rect = annoCanvas.getBoundingClientRect();
+    const currentX = e.clientX - rect.left;
+    const currentY = e.clientY - rect.top;
+    
+    annotations.push({
+        x: Math.min(drawStartX, currentX),
+        y: Math.min(drawStartY, currentY),
+        w: Math.abs(currentX - drawStartX),
+        h: Math.abs(currentY - drawStartY)
+    });
+    redrawCanvas();
+});
+
+async function submitScreenshot() {
+    const notes = document.getElementById('annotator-notes').value;
+    const finalImage = annoCanvas.toDataURL('image/png');
+    
+    const payload = {
+        doc_id: syncedDoc || 'unknown_doc',
+        notes: notes,
+        image: finalImage
+    };
+    
+    const btn = document.querySelector('#annotator-modal .submit-btn:last-child');
+    const ogText = btn.innerHTML;
+    btn.innerHTML = 'Submitting...';
+    btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/submit_screenshot_reject', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.success) {
+            alert('Screenshot submitted successfully to reject folder.');
+            closeAnnotator();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (e) {
+        alert('Request failed: ' + e.message);
+    } finally {
+        btn.innerHTML = ogText;
+        btn.disabled = false;
+    }
+}
+</script>
+</body>
+</html>

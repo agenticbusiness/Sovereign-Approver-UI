@@ -1,0 +1,23 @@
+# ═══════════════════════════════════════════════════════════════
+# SVBL SecOps Sentinel (WASI & Network Bounds)
+# ═══════════════════════════════════════════════════════════════
+
+network_bounds:
+  allowed_ports:
+    - 8100
+  bind_address: "0.0.0.0"
+
+wasi_bounds:
+  allowed_read_paths:
+    - ""
+    - "_00 Raw Base Data"
+    - "_5 Spec Sheet Approver UI"
+    - "_1.1 Part Description Infuser + Parser"
+  allowed_write_paths:
+    - ""
+    - "_1.1 Part Description Infuser + Parser"
+    - "_00 Raw Base Data/_2 Life-Hive Ingestion Packets"
+
+security_flags:
+  enforce_strict_schema: true
+  reject_unknown_keys: true

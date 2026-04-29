@@ -1,0 +1,67 @@
+# Sovereign Spec Data Flow Pipeline Gates
+project: "Sovereign Spec UI - Data Flow Tracker"
+version: "2.1.0"
+
+gates:
+  G0_RAW_INGESTION:
+    name: "Phase 0: Raw Document Ingestion"
+    protocol: "File Drop"
+    optimization_workflow: "None (Manual)"
+    keywords: ["PDF Ingestion", "Raw Asset", "Starting Point"]
+    input: "User Upload"
+    output: "_1 INPUT FOLDER/*.pdf"
+    description: "The raw starting point. This file becomes the input for Phase 1."
+
+  G1_TRUTH_EXTRACTION:
+    name: "Proxy Pointer LLM Truth Extraction"
+    protocol: "llm_truth_extractor.py"
+    optimization_workflow: "/agent-skill-gates-optimization"
+    keywords: ["LLM", "Proxy Pointer RAG", "Data Grounding"]
+    input: "_1 INPUT FOLDER/*.pdf"
+    output: "_2 Output Data/expected_truths.json"
+    description: "Extracts expected part numbers using Gemini to form ground truth."
+
+  G2_PRE_SCAN:
+    name: "Pre-Scan Orchestration"
+    protocol: "pre_scan_orchestrator.py"
+    optimization_workflow: "/cco-upc-optimization"
+    keywords: ["Layout Analysis", "Classification", "Intelligence Generation"]
+    input: "_1 INPUT FOLDER/*.pdf"
+    output: "_2 Output Data/document_intelligence.yaml"
+    description: "Classifies pages (table, cover, mixed) and identifies column geometry."
+
+  G3_EXTRACTION_SWARM:
+    name: "Adversarial Extraction Swarm"
+    protocol: "part_number_extractor.py"
+    optimization_workflow: "/universal-engineering-optimization"
+    keywords: ["PyMuPDF", "Tesseract OCR", "Font Signature", "Multi-Engine"]
+    input: "document_intelligence.yaml & expected_truths.json"
+    output: "_2 Output Data/engine_*.json"
+    description: "Runs parallel text extraction using Alpha (PyMuPDF, Font) and Beta (Tesseract) teams."
+
+  G4_JUDGE_CONSENSUS:
+    name: "Judge Consensus Validation"
+    protocol: "judge_orchestrator.py"
+    optimization_workflow: "/sovereign-governance-optimization"
+    keywords: ["Spatial Overlap", "Confidence Scoring", "RAG Validation"]
+    input: "_2 Output Data/engine_*.json"
+    output: "_2 Output Data/parsed_spatial_data.json"
+    description: "Unifies, deduplicates, and scores matches based on spatial overlap consensus."
+
+  G5_STATIC_EXPORT:
+    name: "Static Asset Export"
+    protocol: "static_exporter.py"
+    optimization_workflow: "/u-p-c-optimization"
+    keywords: ["PDF to PNG", "Red Box Annotation", "Manifest Update"]
+    input: "_2 Output Data/parsed_spatial_data.json"
+    output: "_2 Output Data/pages/*.png & manifest.json"
+    description: "Pre-renders interactive PNG assets with bounding boxes for the frontend."
+
+  G6_UI_VALIDATION:
+    name: "Sovereign Spec Validation UI"
+    protocol: "ui_server.py & index.html"
+    optimization_workflow: "None (Manual UI)"
+    keywords: ["Tastes Like Steak", "Flask Backend", "Hive Tracking"]
+    input: "_2 Output Data/manifest.json"
+    output: "_2 Output Data/_approved/ & Hive_Tracking.xlsx"
+    description: "Interactive visual validation dashboard with direct commit to Hive_Tracking.xlsx."

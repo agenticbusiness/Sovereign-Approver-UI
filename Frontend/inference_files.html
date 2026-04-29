@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TLS - Inference File Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<style>
+:root {
+  --hull-base:#0a0c10;--hull-panel:#11141a;--hull-elevated:#181c25;
+  --steel-border:#2a3040;--steel-bright:#3d4558;
+  --text-primary:#e8ecf2;--text-secondary:#8893a7;--text-muted:#4e5a72;
+  --signal-cyan:#00d4ff;--signal-green:#00e68a;--signal-amber:#ffb84d;--signal-red:#ff4d6a;
+}
+* {margin:0;padding:0;box-sizing:border-box;}
+body {font-family:'Inter',sans-serif;background:var(--hull-base);color:var(--text-primary);min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;}
+
+/* Navbar — 1:1 parity with data_flow.html */
+.navbar {background:var(--hull-panel);border-bottom:1px solid var(--steel-border);padding:12px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);}
+.brand {display:flex;align-items:center;gap:12px;}
+.brand .dot {width:8px;height:8px;border-radius:50%;background:var(--signal-cyan);box-shadow:0 0 8px var(--signal-cyan);}
+.brand span {font-size:0.85rem;letter-spacing:3px;text-transform:uppercase;font-weight:600;color:var(--text-secondary);}
+.nav-links {display:flex;gap:16px;}
+.nav-link {color:var(--text-secondary);text-decoration:none;font-size:0.75rem;text-transform:uppercase;letter-spacing:1px;padding:6px 12px;border-radius:4px;border:1px solid transparent;transition:all 0.2s;}
+.nav-link:hover {color:var(--signal-cyan);border-color:var(--steel-border);background:var(--hull-elevated);}
+.nav-link.active {color:var(--signal-cyan);border-color:var(--steel-border);}
+
+/* Container */
+.container {padding:40px;width:100%;max-width:1600px;margin:0 auto;flex:1;display:flex;flex-direction:column;}
+
+/* Static Menu Bar — 1:1 parity */
+.menu-bar {background:var(--hull-panel);border:1px solid var(--steel-border);border-radius:6px;padding:12px 16px;display:flex;align-items:center;gap:16px;margin-bottom:24px;}
+.menu-bar select {background:var(--hull-base);color:var(--text-primary);border:1px solid var(--steel-border);border-radius:3px;padding:6px 10px;font-size:0.8rem;font-family:'Inter',sans-serif;min-width:300px;}
+.menu-bar select:focus {outline:none;border-color:var(--signal-cyan);}
+.nav-btn {background:transparent;color:var(--text-primary);border:1px solid var(--steel-border);border-radius:3px;padding:6px 10px;cursor:pointer;transition:all .15s;}
+.nav-btn:hover {background:var(--hull-elevated);border-color:var(--steel-bright);}
+.sync-status {display:flex;align-items:center;gap:8px;}
+.sync-dot {width:6px;height:6px;border-radius:50%;}
+
+/* Main Split Layout */
+.split-layout {display:grid;grid-template-columns:1fr 1fr;gap:24px;flex:1;min-height:0;}
+
+/* Left Panel: Page Viewer */
+.page-panel {background:var(--hull-panel);border:1px solid var(--steel-border);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;}
+.panel-header {padding:12px 16px;border-bottom:1px solid var(--steel-border);display:flex;align-items:center;justify-content:space-between;}
+.panel-header h2 {font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;color:var(--text-secondary);font-weight:600;}
+.page-viewer {flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:12px;background:var(--hull-base);}
+.image-container { position:relative; display:inline-block; max-width:100%; }
+.page-viewer img {max-width:100%;height:auto;border-radius:4px;border:1px solid var(--steel-border); display:block; }
+.bbox { position:absolute; border:2px solid var(--signal-cyan); background:rgba(0, 212, 255, 0.1); border-radius:3px; pointer-events:none; box-shadow:0 0 6px rgba(0,212,255,0.4); }
+
+/* Right Panel: Inference Tabs & Cards */
+.tab-bar { display:flex; gap:8px; padding-bottom:12px; border-bottom:1px solid var(--steel-border); margin-bottom:16px; overflow-x:auto; }
+.tab-btn { background:transparent; color:var(--text-secondary); border:1px solid transparent; padding:8px 16px; font-size:0.75rem; font-family:'JetBrains Mono',monospace; text-transform:uppercase; cursor:pointer; border-radius:4px; transition:all 0.2s; white-space:nowrap; }
+.tab-btn:hover { background:var(--hull-elevated); color:var(--text-primary); }
+.tab-btn.active { background:var(--hull-elevated); color:var(--signal-cyan); border-color:var(--steel-border); }
+
+.inference-panel {display:flex;flex-direction:column;gap:16px;overflow-y:auto;padding-right:4px;}
+
+.inf-card {background:var(--hull-panel);border:1px solid var(--steel-border);border-radius:8px;overflow:hidden;transition:border-color 0.2s;}
+.inf-card:hover {border-color:var(--steel-bright);}
+.inf-card.editing {border-color:var(--signal-cyan);}
+.inf-card-header {padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--steel-border);background:var(--hull-elevated);}
+.inf-card-title {font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;}
+.inf-card-title.connection {color:var(--signal-cyan);}
+.inf-card-title.description {color:var(--signal-green);}
+.inf-card-title.dimensions {color:var(--signal-amber);}
+.inf-card-title.material {color:var(--signal-red);}
+.inf-card-title.noun {color:#b088f9;}
+.inf-card-badge {font-size:0.65rem;padding:2px 8px;border-radius:10px;background:var(--hull-base);color:var(--text-secondary);border:1px solid var(--steel-border);font-family:'JetBrains Mono',monospace;}
+.inf-card-body {padding:16px;}
+
+/* Field rows in card */
+.inf-field {display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(42,48,64,0.5);}
+.inf-field:last-child {border-bottom:none;}
+.inf-field-label {font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;min-width:120px;padding-top:4px;}
+.inf-field-value {font-size:0.78rem;color:var(--text-primary);font-family:'JetBrains Mono',monospace;flex:1;text-align:right;word-break:break-all;}
+
+/* Regex preview */
+.regex-preview {font-size:0.7rem;color:var(--signal-amber);font-family:'JetBrains Mono',monospace;background:var(--hull-base);padding:8px 12px;border-radius:4px;border:1px solid var(--steel-border);overflow-x:auto;white-space:nowrap;margin-top:8px;}
+
+/* Editable textarea */
+.yaml-editor {width:100%;min-height:300px;background:var(--hull-base);color:var(--signal-cyan);border:1px solid var(--steel-border);border-radius:4px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:0.75rem;resize:vertical;line-height:1.6;}
+.yaml-editor:focus {outline:none;border-color:var(--signal-cyan);}
+
+/* Buttons */
+.btn-row {display:flex;gap:8px;margin-top:8px;}
+.btn {padding:6px 14px;border-radius:4px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;border:1px solid;font-family:'Inter',sans-serif;transition:all 0.2s;}
+.btn-edit {background:transparent;color:var(--signal-cyan);border-color:rgba(0,212,255,0.3);}
+.btn-edit:hover {background:rgba(0,212,255,0.08);border-color:var(--signal-cyan);}
+.btn-save {background:var(--signal-green);color:#000;border-color:var(--signal-green);}
+.btn-save:hover {background:#33f0a0;transform:translateY(-1px);}
+.btn-cancel {background:transparent;color:var(--signal-red);border-color:rgba(255,77,106,0.3);}
+.btn-cancel:hover {background:rgba(255,77,106,0.08);border-color:var(--signal-red);}
+
+/* Target columns list */
+.col-list {display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;}
+.col-tag {font-size:0.65rem;padding:2px 8px;border-radius:3px;background:var(--hull-base);color:var(--signal-cyan);border:1px solid rgba(0,212,255,0.2);font-family:'JetBrains Mono',monospace;}
+.col-tag.exclude {color:var(--signal-red);border-color:rgba(255,77,106,0.2);}
+
+/* Toast */
+.toast {position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:6px;font-size:0.8rem;font-weight:600;z-index:999;opacity:0;transform:translateY(10px);transition:all 0.3s;pointer-events:none;}
+.toast.show {opacity:1;transform:translateY(0);}
+.toast.success {background:var(--signal-green);color:#000;}
+.toast.error {background:var(--signal-red);color:#fff;}
+</style>
+</head>
+<body>
+
+<div class="navbar">
+    <div class="brand"><div class="dot"></div><span>Sovereign Pipeline UI</span></div>
+    <div class="nav-links">
+        <a href="index.html" class="nav-link">TLS Spec Validation</a>
+        <a href="data_flow.html" class="nav-link">Data Flow Dashboard</a>
+        <a href="#" class="nav-link active">Inference Files</a>
+        <a href="parse_to_copy.html" class="nav-link">Parse to Copy</a>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Static Menu Bar — 1:1 parity -->
+    <div class="menu-bar">
+        <select id="doc-select" onchange="changeDocument(this.value)">
+            <option value="">Select Document...</option>
+        </select>
+        <div style="width:1px;height:24px;background:var(--steel-border);"></div>
+        <div class="page-controls" id="page-controls" style="display:flex;align-items:center;gap:8px;">
+            <button class="nav-btn" onclick="changePage(-1)">←</button>
+            <input type="text" id="inf-page-input" style="width:40px;text-align:center;background:var(--hull-base);color:var(--text-primary);border:1px solid var(--steel-border);border-radius:3px;padding:6px;font-size:0.8rem;font-family:'JetBrains Mono',monospace;" value="1" onchange="goToPage()">
+            <span style="color:var(--text-secondary);font-size:0.8rem;font-family:'JetBrains Mono',monospace;">/ <span id="inf-total-pages">--</span></span>
+            <button class="nav-btn" onclick="changePage(1)">→</button>
+        </div>
+        <div style="width:1px;height:24px;background:var(--steel-border);"></div>
+        <div class="sync-status" id="sync-status">
+            <div class="sync-dot" style="background:var(--signal-amber)"></div>
+            <span style="color:var(--text-secondary)">No document synced.</span>
+        </div>
+    </div>
+
+    <!-- Split Layout: Page on Left, Inference Cards on Right -->
+    <div class="split-layout">
+        <div class="page-panel">
+            <div class="panel-header">
+                <h2>Current Page Preview</h2>
+                <span id="page-label" style="font-size:0.75rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace;">--</span>
+            </div>
+            <div class="page-viewer">
+                <div class="image-container" id="image-container">
+                    <img id="page-img" src="" alt="Select a document to preview" style="display:none;" onload="renderOverlays()">
+                </div>
+                <span id="page-placeholder" style="color:var(--text-muted);font-size:0.85rem;">Select a document and page to preview.</span>
+            </div>
+        </div>
+
+        <div class="inference-panel" id="inference-panel">
+            <div class="tab-bar" id="tab-bar"></div>
+            <div id="tab-content"></div>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let manifestDocs = [];
+let syncedDoc = null;
+let syncedPage = null;
+let syncedTotalPages = null;
+let inferenceFiles = {};  // { filename: { yaml_content, parsed } }
+let aliasesData = {}; // { ALIAS: TARGET }
+let currentDocData = null; // parsed_spatial_data.json content
+let activeTab = 'connection'; // Default tab
+let editingFile = null;
+
+// ── Document / Page sync (localStorage parity) ──
+function changeDocument(id) {
+    if (!id) return;
+    const doc = manifestDocs.find(d => d.id === id);
+    if (!doc) return;
+    syncedDoc = id;
+    syncedPage = '1';
+    syncedTotalPages = String(doc.pages);
+    localStorage.setItem('sovereign_sync_doc', syncedDoc);
+    localStorage.setItem('sovereign_sync_page', syncedPage);
+    localStorage.setItem('sovereign_sync_total_pages', syncedTotalPages);
+    updateSyncUI();
+    renderPageImage();
+    loadDocData();
+}
+
+function changePage(delta) {
+    if (!syncedDoc) return;
+    let p = parseInt(syncedPage) + delta;
+    if (p < 1) p = 1;
+    if (p > parseInt(syncedTotalPages)) p = parseInt(syncedTotalPages);
+    syncedPage = String(p);
+    localStorage.setItem('sovereign_sync_page', syncedPage);
+    document.getElementById('inf-page-input').value = syncedPage;
+    renderPageImage();
+}
+
+function goToPage() {
+    const v = parseInt(document.getElementById('inf-page-input').value);
+    if (!v || v < 1 || v > parseInt(syncedTotalPages)) return;
+    syncedPage = String(v);
+    localStorage.setItem('sovereign_sync_page', syncedPage);
+    renderPageImage();
+}
+
+function updateSyncUI() {
+    const ss = document.getElementById('sync-status');
+    const pi = document.getElementById('inf-page-input');
+    const tp = document.getElementById('inf-total-pages');
+    if (syncedDoc) {
+        ss.innerHTML = `<div class="sync-dot" style="background:var(--signal-green);box-shadow:0 0 6px var(--signal-green)"></div><span style="color:var(--signal-green)">● Synced Active</span>`;
+        pi.value = syncedPage;
+        tp.textContent = syncedTotalPages;
+    } else {
+        ss.innerHTML = `<div class="sync-dot" style="background:var(--signal-amber)"></div><span style="color:var(--text-secondary)">No document synced.</span>`;
+        tp.textContent = '--';
+    }
+}
+
+function renderPageImage() {
+    const img = document.getElementById('page-img');
+    const ph = document.getElementById('page-placeholder');
+    const lbl = document.getElementById('page-label');
+    // Clear old overlays
+    document.querySelectorAll('.bbox').forEach(e => e.remove());
+    
+    if (!syncedDoc || !syncedPage) { img.style.display='none'; ph.style.display='block'; return; }
+    ph.style.display = 'none';
+    img.style.display = 'block';
+    
+    const isLocal = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+    if (isLocal) {
+        img.src = `/api/page/${encodeURIComponent(syncedDoc)}/${syncedPage}`;
+    } else {
+        img.src = `_2 Output Data/${encodeURIComponent(syncedDoc)}/pages/${syncedPage}.png`;
+    }
+    
+    lbl.textContent = `${syncedDoc} — Page ${syncedPage}`;
+}
+
+async function loadDocData() {
+    if (!syncedDoc) return;
+    try {
+        const isLocal = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+        const url = isLocal ? `/api/document/${encodeURIComponent(syncedDoc)}/data` : `_2 Output Data/${encodeURIComponent(syncedDoc)}/parsed_spatial_data.json`;
+        const res = await fetch(url);
+        const data = await res.json();
+        currentDocData = data;
+        renderOverlays();
+    } catch(e) {
+        console.error("Failed to load doc data:", e);
+    }
+}
+
+function renderOverlays() {
+    const container = document.getElementById('image-container');
+    const img = document.getElementById('page-img');
+    // Remove existing bboxes
+    document.querySelectorAll('.bbox').forEach(e => e.remove());
+    
+    if (!currentDocData || !activeTab || !img || img.style.display === 'none') return;
+    
+    // Find active field mapping. e.g. "connection" -> "CONNECTION"
+    let targetField = activeTab.toUpperCase();
+    
+    const pageData = currentDocData.pages?.find(p => p.page_num === parseInt(syncedPage));
+    if (!pageData) return;
+    
+    const matches = pageData.matches?.filter(m => m.field === targetField) || [];
+    
+    const imgRect = img.getBoundingClientRect();
+    const natW = img.naturalWidth;
+    const natH = img.naturalHeight;
+    if (!natW || !natH) return; // Image not fully loaded yet
+    
+    const scaleX = img.width / natW;
+    const scaleY = img.height / natH;
+    
+    matches.forEach(match => {
+        if (!match.bbox) return;
+        const b = match.bbox;
+        const div = document.createElement('div');
+        div.className = 'bbox';
+        div.style.left = (b.x * scaleX) + 'px';
+        div.style.top = (b.y * scaleY) + 'px';
+        div.style.width = (b.width * scaleX) + 'px';
+        div.style.height = (b.height * scaleY) + 'px';
+        
+        // Add tooltip
+        div.title = `Field: ${match.field}\nValue: ${match.text}`;
+        container.appendChild(div);
+    });
+}
+
+// ── Cross-tab sync listener ──
+window.addEventListener('storage', (e) => {
+    if (e.key === 'sovereign_sync_doc' || e.key === 'sovereign_sync_page' || e.key === 'sovereign_sync_total_pages') {
+        syncedDoc = localStorage.getItem('sovereign_sync_doc');
+        syncedPage = localStorage.getItem('sovereign_sync_page');
+        syncedTotalPages = localStorage.getItem('sovereign_sync_total_pages');
+        document.getElementById('doc-select').value = syncedDoc || '';
+        updateSyncUI();
+        renderPageImage();
+        loadDocData();
+    }
+});
+
+// ── Inference file loading & Tabs ──
+async function loadInferenceFiles() {
+    try {
+        const isLocal = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+        const url = isLocal ? '/api/inference_files' : '_2 Output Data/inference_files.json';
+        const res = await fetch(url);
+        const data = await res.json();
+        inferenceFiles = data;
+        renderTabs();
+    } catch(e) {
+        console.error("Failed to load inference files:", e);
+    }
+}
+
+function renderTabs() {
+    const tabBar = document.getElementById('tab-bar');
+    tabBar.innerHTML = '';
+    
+    const sortedFiles = Object.keys(inferenceFiles).sort();
+    
+    sortedFiles.forEach(filename => {
+        const baseName = filename.replace('inference_', '').replace('.yaml', '');
+        const btn = document.createElement('button');
+        btn.className = `tab-btn ${activeTab === baseName ? 'active' : ''}`;
+        btn.textContent = baseName;
+        btn.onclick = () => {
+            activeTab = baseName;
+            renderTabs(); // update active class
+            renderTabContent();
+            renderOverlays(); // redraw boxes for new tab
+        };
+        tabBar.appendChild(btn);
+    });
+    
+    renderTabContent();
+}
+
+function renderTabContent() {
+    const content = document.getElementById('tab-content');
+    content.innerHTML = '';
+    
+    const filename = `inference_${activeTab}.yaml`;
+    if (!inferenceFiles[filename]) return;
+    
+    const fileData = inferenceFiles[filename];
+    const parsed = fileData.parsed;
+    
+    const colorMap = {
+        'connection': 'connection',
+        'description': 'description',
+        'dimensions': 'dimensions',
+        'material': 'material',
+        'noun': 'noun'
+    };
+    const colorClass = colorMap[activeTab] || 'connection';
+    
+    const field = parsed.extraction_targets?.[0]?.field || activeTab;
+    const regex = parsed.extraction_targets?.[0]?.safeguard_regex || 'N/A';
+    const desc = parsed.extraction_targets?.[0]?.description || '';
+    const targetCols = parsed.target_columns || [];
+    const excludeCols = parsed.exclude_columns || [];
+    const judge = parsed.judge || {};
+    
+    // Find relevant aliases (where target is this field)
+    let relevantAliases = [];
+    if (Object.keys(aliasesData).length > 0) {
+        for (const [alias, target] of Object.entries(aliasesData)) {
+            // For simplicity, we just list all aliases. In a real scenario, you'd map aliases based on the field if the backend provides it.
+            // Since the current aliasesData is a flat dict from Excel, we'll just show ones that match the target value or show a subset.
+            // Actually, the ALIAS_DICT maps "Original Value" to "Converted Value".
+            // Since we don't have a direct field mapping, we'll just show the whole dictionary or a filtered view if possible.
+        }
+    }
+    // Let's format the aliases nicely if we can't filter
+    let aliasHtml = `<div style="font-size:0.7rem; color:var(--text-secondary); max-height:150px; overflow-y:auto; background:var(--hull-base); padding:8px; border-radius:4px; border:1px solid var(--steel-border); margin-top:4px;">`;
+    const aliasKeys = Object.keys(aliasesData);
+    if (aliasKeys.length > 0) {
+        aliasKeys.slice(0, 50).forEach(k => { // show first 50 to avoid DOM overload
+            aliasHtml += `<div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.05);padding:2px 0;"><span>${k}</span><span style="color:var(--signal-cyan)">${aliasesData[k]}</span></div>`;
+        });
+        if (aliasKeys.length > 50) aliasHtml += `<div style="text-align:center;padding-top:4px;">+ ${aliasKeys.length - 50} more...</div>`;
+    } else {
+        aliasHtml += `No aliases loaded.`;
+    }
+    aliasHtml += `</div>`;
+
+    const card = document.createElement('div');
+    card.className = 'inf-card';
+    card.id = `card-${activeTab}`;
+    
+    card.innerHTML = `
+        <div class="inf-card-header">
+            <span class="inf-card-title ${colorClass}">${field}</span>
+            <span class="inf-card-badge">${filename}</span>
+        </div>
+        <div class="inf-card-body" id="body-${activeTab}">
+            <div class="inf-field">
+                <span class="inf-field-label">Description</span>
+                <span class="inf-field-value">${desc}</span>
+            </div>
+            <div class="inf-field">
+                <span class="inf-field-label">Target Cols</span>
+                <div class="col-list">${targetCols.map(c => `<span class="col-tag">${c}</span>`).join('')}</div>
+            </div>
+            <div class="inf-field">
+                <span class="inf-field-label">Exclude Cols</span>
+                <div class="col-list">${excludeCols.map(c => `<span class="col-tag exclude">${c}</span>`).join('')}</div>
+            </div>
+            <div class="inf-field">
+                <span class="inf-field-label">Min Agreement</span>
+                <span class="inf-field-value">${judge.min_agreement || '--'}</span>
+            </div>
+            <div class="inf-field">
+                <span class="inf-field-label">BBox Tolerance</span>
+                <span class="inf-field-value">${judge.bbox_tolerance_px || '--'}px</span>
+            </div>
+            
+            <div style="margin-top:16px;">
+                <span class="inf-field-label">Safeguard Regex</span>
+                <div class="regex-preview" title="Safeguard Regex">${escapeHtml(regex)}</div>
+            </div>
+            
+            <div style="margin-top:16px;">
+                <span class="inf-field-label">Global Master Aliases (Acronyms / Regional)</span>
+                ${aliasHtml}
+            </div>
+
+            <div class="btn-row" style="margin-top:16px;">
+                <button class="btn btn-edit" onclick="startEdit('${filename}', '${activeTab}')">Edit YAML</button>
+            </div>
+        </div>
+    `;
+    content.appendChild(card);
+}
+
+function startEdit(filename, baseName) {
+    editingFile = filename;
+    const card = document.getElementById(`card-${baseName}`);
+    const body = document.getElementById(`body-${baseName}`);
+    card.classList.add('editing');
+    
+    const rawYaml = inferenceFiles[filename].raw;
+    body.innerHTML = `
+        <textarea class="yaml-editor" id="editor-${baseName}">${escapeHtml(rawYaml)}</textarea>
+        <div class="btn-row">
+            <button class="btn btn-save" onclick="saveEdit('${filename}', '${baseName}')">Save</button>
+            <button class="btn btn-cancel" onclick="cancelEdit()">Cancel</button>
+        </div>
+    `;
+}
+
+async function saveEdit(filename, baseName) {
+    const editor = document.getElementById(`editor-${baseName}`);
+    const newYaml = editor.value;
+    
+    // Validate YAML before sending
+    try {
+        jsyaml.load(newYaml);
+    } catch(e) {
+        showToast(`Invalid YAML: ${e.message}`, 'error');
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/inference_files', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ filename: filename, content: newYaml })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`${filename} saved successfully.`, 'success');
+            editingFile = null;
+            await loadInferenceFiles();
+        } else {
+            showToast(`Save failed: ${data.error}`, 'error');
+        }
+    } catch(e) {
+        showToast(`Save failed: ${e.message}`, 'error');
+    }
+}
+
+function cancelEdit() {
+    editingFile = null;
+    renderTabContent();
+}
+
+function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast show ${type}`;
+    setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Boot ──
+async function boot() {
+    const s = document.getElementById('doc-select');
+    const isLocal = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+    try {
+        if (isLocal) {
+            const r = await fetch('/api/documents'); const docs = await r.json();
+            manifestDocs = docs;
+            docs.forEach(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.id + ' (' + d.pages + 'p)'; s.appendChild(o); });
+            // Fetch aliases
+            const ar = await fetch('/api/aliases');
+            aliasesData = await ar.json();
+        } else {
+            const r = await fetch('_2 Output Data/manifest.json'); const docs = await r.json();
+            manifestDocs = docs;
+            docs.forEach(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.id; s.appendChild(o); });
+            // Fetch aliases static
+            const ar = await fetch('_2 Output Data/aliases.json');
+            if (ar.ok) aliasesData = await ar.json();
+        }
+        
+        // COR-003: Cross-tab session persistence — read before clearing
+        const savedDoc = localStorage.getItem('sovereign_sync_doc');
+        const savedPage = localStorage.getItem('sovereign_sync_page');
+        const savedTotal = localStorage.getItem('sovereign_sync_total_pages');
+        if (savedDoc && manifestDocs.some(d => d.id === savedDoc)) {
+            syncedDoc = savedDoc;
+            syncedPage = savedPage || '1';
+            syncedTotalPages = savedTotal || '1';
+            s.value = savedDoc;
+        } else {
+            localStorage.removeItem('sovereign_sync_doc');
+            localStorage.removeItem('sovereign_sync_page');
+            localStorage.removeItem('sovereign_sync_total_pages');
+        }
+        
+        updateSyncUI();
+        renderPageImage();
+        if (syncedDoc) loadDocData();
+    } catch(e) { console.error("Boot error:", e); }
+    
+    await loadInferenceFiles();
+}
+
+boot();
+</script>
+</body>
+</html>

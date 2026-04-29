@@ -1,0 +1,25 @@
+# ═══════════════════════════════════════════════════════════════
+# SOVEREIGN PROXY POINT RAYCAST INFERENCE
+# ═══════════════════════════════════════════════════════════════
+
+header_anchors:
+  - "PART #"
+  - "PART NO"
+  - "ITEM #"
+  - "ITEM NO"
+  - "MODEL"
+  - "PRODUCT ID"
+
+spatial_tolerances:
+  x_expansion_margin: 5.0      # Extra horizontal pixel padding for the column
+  y_max_gap: 30.0              # Stop raycast if vertical gap exceeds this (e.g., end of table)
+  header_height_offset: 15.0   # Start scanning strictly below the header
+
+validation_regex:
+  strict_part: "^[A-Z0-9\\-]+$"
+  minimum_length: 4
+
+forbidden_zones:
+  - "NOTES"
+  - "DISCLAIMER"
+  - "PAGE"

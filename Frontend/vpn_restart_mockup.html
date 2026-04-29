@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VPN Sync Animations</title>
+    <style>
+        body { font-family: 'Courier New', Courier, monospace; background: #0f172a; color: #fff; padding: 20px; }
+        .container { display: flex; gap: 20px; }
+        .box { border: 1px solid #334155; padding: 20px; flex: 1; border-radius: 8px; background: #1e293b; min-height: 400px; position: relative;}
+        .title { font-weight: bold; font-size: 1.2rem; margin-bottom: 15px; color: #38bdf8;}
+        button { background: #3b82f6; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; margin-bottom: 20px;}
+        button:hover { background: #2563eb; }
+        
+        .log-line { margin: 5px 0; font-size: 0.9rem; opacity: 0; transform: translateY(10px); animation: fadeIn 0.3s forwards; }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+        
+        .success { color: #4ade80; }
+        .warning { color: #fbbf24; }
+        .info { color: #60a5fa; }
+        
+        /* Dropbox visual */
+        .folder { width: 50px; height: 40px; background: #fbbf24; border-radius: 5px 5px 0 0; position: relative; display: inline-block; margin-right: 15px; }
+        .folder::before { content: ''; position: absolute; top: -10px; left: 0; width: 20px; height: 10px; background: #f59e0b; border-radius: 5px 5px 0 0; }
+        .file { width: 30px; height: 40px; background: white; border: 1px solid #ccc; position: absolute; top: -50px; left: 10px; opacity: 0; transition: all 1s ease-in-out; }
+        
+        /* SSH visual */
+        .terminal { background: #000; padding: 15px; border-radius: 5px; height: 300px; overflow-y: auto; font-family: monospace; }
+        
+    </style>
+</head>
+<body>
+
+    <button id="btnDropbox" onclick="runDropbox()">Play Dropbox Sync Animation</button>
+    <button id="btnSSH" onclick="runSSH()">Play SSH Reboot Animation</button>
+
+    <div class="container">
+        <!-- DROPBOX ANIMATION -->
+        <div class="box" id="dropboxBox">
+            <div class="title">Dropbox Sync Process</div>
+            <div style="height: 100px; position: relative; margin-top: 50px; padding-left: 20px;">
+                <div class="folder" id="dbFolder"></div>
+                <div class="file" id="dbFile"></div>
+                <span style="position: absolute; top: 10px; left: 80px; font-weight: bold;">VPN_FileOS_Vector_DBs</span>
+            </div>
+            <div id="dbLogs" style="margin-top: 20px;"></div>
+        </div>
+
+        <!-- SSH ANIMATION -->
+        <div class="box" id="sshBox">
+            <div class="title">SSH Manual Reboot Process</div>
+            <div class="terminal" id="termLogs"></div>
+        </div>
+    </div>
+
+    <script>
+        function runDropbox() {
+            const logs = document.getElementById('dbLogs');
+            const file = document.getElementById('dbFile');
+            logs.innerHTML = '';
+            
+            let delay = 0;
+            const addLog = (text, cls='') => {
+                setTimeout(() => {
+                    logs.innerHTML += `<div class="log-line ${cls}">${text}</div>`;
+                }, delay);
+                delay += 800;
+            };
+
+            addLog("User saves 'nginx.conf' locally.", "info");
+            
+            setTimeout(() => {
+                file.style.opacity = 1;
+                file.style.top = '10px';
+                file.style.transform = 'rotate(10deg)';
+            }, delay);
+            
+            addLog("Dropbox detects file change...", "warning");
+            addLog("Syncing to cloud...", "info");
+            
+            setTimeout(() => {
+                file.style.top = '30px';
+                file.style.opacity = 0;
+            }, delay);
+            
+            addLog("File downloaded by Hostinger VPS.", "success");
+            addLog("[!] NOTE: Nginx does NOT auto-reload config.", "warning");
+            addLog("[X] vector.fileos.cloud is NOT live yet.", "warning");
+        }
+
+        function runSSH() {
+            const term = document.getElementById('termLogs');
+            term.innerHTML = '';
+            
+            let delay = 0;
+            const addLog = (text, cls='') => {
+                setTimeout(() => {
+                    term.innerHTML += `<div class="log-line ${cls}">${text}</div>`;
+                }, delay);
+                delay += 700;
+            };
+
+            addLog("PS C:\\> ssh srv1");
+            addLog("Welcome to Ubuntu 22.04 LTS", "info");
+            addLog("root@srv1:~# cd /root/Dropbox/VPN_FileOS_Vector_DBs");
+            addLog("root@srv1:~/Dropbox/VPN_FileOS_Vector_DBs# ls -la");
+            addLog("-rw-r--r-- 1 root root 800 Apr 26 11:40 nginx.conf");
+            addLog("root@srv1:~/Dropbox/VPN_FileOS_Vector_DBs# docker compose restart nginx-vpn-router", "warning");
+            addLog("Restarting vector_vpn_router ... done", "success");
+            addLog("root@srv1:~/Dropbox/VPN_FileOS_Vector_DBs# curl -I http://vector.fileos.cloud");
+            addLog("HTTP/1.1 200 OK", "success");
+            addLog("[SUCCESS] The new route is live!", "success");
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# Known Parts Whitelist — Confirmed part numbers from UI approvals
+# Auto-updated by feedback_manager.py when users approve matches
+# These bypass regex validation (pre-approved).
+parts: []

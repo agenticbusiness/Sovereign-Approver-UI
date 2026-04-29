@@ -1,0 +1,81 @@
+# ═══════════════════════════════════════════════════════════════
+# LlamaIndex LiteParse Dynamic Request Configurations
+# ═══════════════════════════════════════════════════════════════
+# Target Folder: Dynamic directory where raw PDFs are stored.
+target_folder: "_1 INPUT FOLDER"
+
+# Extraction Targets: Proxy Pointer RAG definitions
+extraction_targets:
+  - field: "Part Number"
+    safeguard_regex: "^[A-Z]{2,4}[A-Z0-9]{2,11}$"
+    description: "The primary manufacturer part number (2-4 letter prefix + alphanumeric suffix)"
+  - field: "Product Name"
+    safeguard_regex: "^[A-Z][a-zA-Z0-9 -]{5,40}$"
+    description: "The human-readable classification or marketing name of the product"
+  - field: "Dimensions"
+    safeguard_regex: "^[0-9]+(?:\\.[0-9]+)?(?:/[0-9]+)?\\s?(?:\"|inch|mm|cm|in)$"
+    description: "Extracts sizing metrics"
+  - field: "Material"
+    safeguard_regex: "^(Brass|Stainless Steel|PEX|Copper|PVC|CPVC|Iron)$"
+    description: "Identifies the composition of the product"
+
+# ═══════════════════════════════════════════════════════════════
+# Tri-Engine Configuration
+# ═══════════════════════════════════════════════════════════════
+engines:
+  - name: "tesseract"
+    script: "Engines/engine_tesseract.py"
+    weight: 1.0
+    enabled: true
+  - name: "pymupdf"
+    script: "Engines/engine_pymupdf.py"
+    weight: 1.0
+    enabled: true
+  - name: "liteparse"
+    script: "Engines/liteparse_engine.js"
+    weight: 1.0
+    enabled: true
+
+# Tesseract binary path (Windows)
+tesseract_cmd: "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+
+# ═══════════════════════════════════════════════════════════════
+# Column Targeting (Proxy Pointer Standard)
+# ═══════════════════════════════════════════════════════════════
+target_columns:
+  - "BLACK"
+  - "BLK"
+  - "GALVANIZED"
+  - "GALV"
+  - "PART NUMBER"
+  - "PART NO"
+  - "PART #"
+  - "PART NUM"
+  - "ID"
+  - "SKU"
+  - "MFG PART NUMBER"
+  - "MFG P/N"
+  - "P/N"
+
+exclude_columns:
+  - "SIZE"
+  - "INNER"
+  - "MASTER"
+  - "QTY"
+  - "QUANTITY"
+  - "PRICE"
+
+# ═══════════════════════════════════════════════════════════════
+# Judge Consensus Configuration
+# ═══════════════════════════════════════════════════════════════
+judge:
+  min_agreement: 2        # Minimum engines that must agree for auto-approve
+  bbox_tolerance_px: 10   # Max pixel difference for bbox matching across engines
+  confidence_levels:
+    unanimous: "high"     # All engines agree
+    majority: "medium"    # 2/3 agree
+    single: "low"         # Only 1 engine found it
+
+# Validation Strictness
+validation:
+  enforce_count_match: true   # The bounding box count MUST match the CSV record count

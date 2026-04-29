@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TLS - Single View Approver</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--hull-base:#0c0e12;--hull-panel:#14171e;--hull-elevated:#1c2029;--steel-border:#2a3040;--steel-bright:#3d4558;--text-primary:#e8ecf2;--text-secondary:#8893a7;--text-muted:#4e5a72;--signal-green:#10b981;--signal-red:#ef4444;--signal-amber:#f59e0b;--signal-cyan:#06b6d4;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:var(--hull-base);color:var(--text-primary);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── Navbar ── */
+.navbar{background:var(--hull-panel);border-bottom:1px solid var(--steel-border);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand .dot{width:8px;height:8px;border-radius:50%;background:var(--signal-cyan);box-shadow:0 0 8px var(--signal-cyan);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 8px var(--signal-cyan);}50%{box-shadow:0 0 16px var(--signal-cyan);}}
+.brand span{font-size:0.85rem;letter-spacing:2px;text-transform:uppercase;font-weight:700;color:var(--text-primary);}
+.toolbar-controls{display:flex;align-items:center;gap:12px;}
+.doc-select{background:var(--hull-base);color:var(--text-primary);border:1px solid var(--steel-border);border-radius:4px;padding:7px 10px;font-size:0.8rem;min-width:320px;font-family:'Inter',sans-serif;outline:none;}
+.doc-select:focus{border-color:var(--signal-cyan);}
+.btn{padding:7px 14px;border-radius:4px;font-size:0.78rem;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;text-transform:uppercase;letter-spacing:0.5px;}
+.btn-approve{background:var(--signal-green);color:#000;}
+.btn-approve:hover{opacity:0.85;box-shadow:0 0 12px rgba(16,185,129,0.4);}
+.btn-reject{background:var(--signal-red);color:#fff;}
+.btn-reject:hover{opacity:0.85;box-shadow:0 0 12px rgba(239,68,68,0.4);}
+.zoom-badge{font-size:0.7rem;font-family:'JetBrains Mono',monospace;color:var(--text-muted);padding:4px 8px;border:1px solid var(--steel-border);border-radius:3px;min-width:50px;text-align:center;}
+
+/* ── Main Split ── */
+.main{display:flex;flex:1;overflow:hidden;}
+
+/* ── Sidebar ── */
+.sidebar{width:380px;min-width:320px;background:var(--hull-panel);border-right:1px solid var(--steel-border);display:flex;flex-direction:column;}
+.sidebar-header{padding:10px 16px;border-bottom:1px solid var(--steel-border);background:var(--hull-elevated);font-size:0.7rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--text-secondary);display:flex;justify-content:space-between;align-items:center;}
+.sidebar-header .count{font-family:'JetBrains Mono',monospace;color:var(--signal-cyan);}
+.sidebar-content{flex:1;overflow-y:auto;padding:10px;}
+
+/* ── Part Card ── */
+.part-card{background:var(--hull-base);border:1px solid var(--steel-border);border-radius:5px;margin-bottom:8px;overflow:hidden;transition:border-color 0.15s;}
+.part-card:hover{border-color:var(--steel-bright);}
+.part-card-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--hull-elevated);border-bottom:1px solid var(--steel-border);cursor:pointer;}
+.part-title{font-size:0.95rem;font-weight:700;color:var(--signal-cyan);font-family:'JetBrains Mono',monospace;}
+.part-badge{font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;border-radius:3px;font-weight:600;}
+.part-badge.parsed{background:rgba(16,185,129,0.12);color:var(--signal-green);border:1px solid rgba(16,185,129,0.3);}
+.part-badge.missing{background:rgba(245,158,11,0.12);color:var(--signal-amber);border:1px solid rgba(245,158,11,0.3);}
+.part-card-body{padding:8px 12px;}
+.var-row{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(42,48,64,0.5);}
+.var-row:last-child{border-bottom:none;}
+.var-label{font-size:0.62rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);font-weight:600;}
+.var-val{font-size:0.8rem;color:var(--text-primary);font-family:'JetBrains Mono',monospace;text-align:right;}
+
+/* ── Viewport ── */
+.viewport{flex:1;background:#111318;overflow:hidden;position:relative;cursor:grab;}
+.viewport:active{cursor:grabbing;}
+.img-container{transform-origin:0 0;transition:none;position:absolute;top:0;left:0;}
+.img-container img{display:block;max-width:none;}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--hull-elevated);border:1px solid var(--steel-border);color:#fff;padding:10px 20px;border-radius:4px;font-size:0.85rem;display:none;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.6);}
+/* ── Dropzone ── */
+.dropzone { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(12, 14, 18, 0.85); z-index: 10000; display: flex; flex-direction: column; justify-content: center; align-items: center; border: 4px dashed var(--signal-cyan); display: none; }
+.dropzone.active { display: flex; }
+.dropzone-text { font-size: 2rem; font-weight: 700; color: var(--signal-cyan); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 2px; }
+.dropzone-sub { color: var(--text-secondary); margin-top: 15px; font-size: 1rem; }
+</style>
+</head>
+<body>
+
+<div class="dropzone" id="dropzone">
+  <div class="dropzone-text">Drop PDF to Parse</div>
+  <div class="dropzone-sub">Release file to actively start section extraction</div>
+</div>
+
+<div class="navbar">
+  <div class="brand"><div class="dot"></div><span>TLS Approver</span></div>
+  <div class="toolbar-controls">
+    <select class="doc-select" id="doc-select" onchange="loadDocument(this.value)">
+      <option value="">Select Cutout...</option>
+    </select>
+    <span class="zoom-badge" id="zoom-badge">75%</span>
+    <button class="btn btn-reject" onclick="rejectCurrent()">Reject</button>
+    <button class="btn btn-approve" onclick="approveCurrent()">Approve</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span id="sidebar-hdr">Parsed Variables</span>
+      <span class="count" id="part-count">0 parts</span>
+    </div>
+    <div class="sidebar-content" id="sidebar-content">
+      <div style="color:var(--text-muted);font-size:0.85rem;text-align:center;margin-top:40px;">Select a cutout to begin.</div>
+    </div>
+  </div>
+  <div class="viewport" id="viewport">
+    <div class="img-container" id="img-container">
+      <img id="crop-image" src="" alt="" style="display:none;" />
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentDoc = '';
+let docList = [];
+
+// ── Zoom & Pan State ──
+let scale = 0.75;
+let panX = 0, panY = 0;
+let isPanning = false;
+let panStartX = 0, panStartY = 0;
+
+const viewport = document.getElementById('viewport');
+const imgContainer = document.getElementById('img-container');
+const dropzone = document.getElementById('dropzone');
+
+// Drag and Drop
+window.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('active'); });
+window.addEventListener('dragleave', (e) => { if(e.target === dropzone) dropzone.classList.remove('active'); });
+window.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('active');
+  const files = e.dataTransfer.files;
+  if(files.length > 0) {
+    showToast('Uploading ' + files[0].name + ' for parsing...', 'cyan');
+    const formData = new FormData();
+    formData.append('file', files[0]);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      if(res.ok) {
+        showToast('✅ File parsed successfully!', 'green');
+        init(); // reload documents
+      } else {
+        showToast('✗ Parsing failed', 'red');
+      }
+    } catch (err) {
+      showToast('✗ Upload error', 'red');
+    }
+  }
+});
+
+// Mouse-wheel zoom
+viewport.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -0.1 : 0.1;
+  const newScale = Math.max(0.3, Math.min(5, scale + delta));
+  
+  // Zoom toward cursor position
+  const rect = viewport.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  
+  panX = mx - (mx - panX) * (newScale / scale);
+  panY = my - (my - panY) * (newScale / scale);
+  scale = newScale;
+  
+  applyTransform();
+  document.getElementById('zoom-badge').textContent = Math.round(scale * 100) + '%';
+}, { passive: false });
+
+// Pan with mouse drag
+viewport.addEventListener('mousedown', (e) => {
+  isPanning = true;
+  panStartX = e.clientX - panX;
+  panStartY = e.clientY - panY;
+  viewport.style.cursor = 'grabbing';
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+  panX = e.clientX - panStartX;
+  panY = e.clientY - panStartY;
+  applyTransform();
+});
+window.addEventListener('mouseup', () => {
+  isPanning = false;
+  viewport.style.cursor = 'grab';
+});
+
+function applyTransform() {
+  imgContainer.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+}
+
+function resetZoom() {
+  scale = 0.75; panX = 0; panY = 0;
+  applyTransform();
+  document.getElementById('zoom-badge').textContent = '75%';
+}
+
+// ── Data Loading ──
+async function init() {
+  try {
+    const res = await fetch('/api/documents');
+    docList = await res.json();
+    const sel = document.getElementById('doc-select');
+    sel.innerHTML = '<option value="">Select Cutout...</option>';
+    docList.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.filename;
+      sel.appendChild(opt);
+    });
+    if (docList.length > 0) {
+      sel.value = docList[0].id;
+      loadDocument(docList[0].id);
+    }
+  } catch(e) {
+    showToast('Failed to load documents: ' + e.message, 'red');
+  }
+}
+
+async function loadDocument(id) {
+  if (!id) return;
+  currentDoc = id;
+  resetZoom();
+  
+  try {
+    const res = await fetch(`/api/document/${id}/data`);
+    const data = await res.json();
+    
+    // Set Image
+    const img = document.getElementById('crop-image');
+    img.src = `/api/page/${id}/1`;
+    img.style.display = 'block';
+    
+    // Render Sidebar
+    const content = document.getElementById('sidebar-content');
+    content.innerHTML = '';
+    document.getElementById('sidebar-hdr').textContent = data.section || 'Unknown Section';
+    
+    // Build a unified part list: merge part_numbers[] with parts{} keys
+    const allPartNums = new Set();
+    
+    // Add from the part_numbers array (the red box extractions)
+    if (data.part_numbers && Array.isArray(data.part_numbers)) {
+      data.part_numbers.forEach(p => allPartNums.add(String(p).trim()));
+    }
+    // Add from the parts{} keys
+    if (data.parts) {
+      Object.keys(data.parts).forEach(k => allPartNums.add(String(k).trim()));
+    }
+    
+    // Also collect the "galvanized" / real item# from inside parts data
+    const realItemMap = {}; // maps raw key -> real item number (e.g. "6400" -> "CPSM-G01")
+    if (data.parts) {
+      Object.entries(data.parts).forEach(([key, vars]) => {
+        if (vars && typeof vars === 'object') {
+          // The "galvanized" field typically holds the real MFG part number
+          if (vars.galvanized) realItemMap[key] = vars.galvanized;
+        }
+      });
+    }
+    
+    document.getElementById('part-count').textContent = allPartNums.size + ' parts';
+    
+    // Render each part number
+    allPartNums.forEach(pn => {
+      const card = document.createElement('div');
+      card.className = 'part-card';
+      
+      const hasData = data.parts && data.parts[pn];
+      const vars = hasData ? data.parts[pn] : null;
+      
+      // Determine display name: prefer the real MFG item# (e.g. CPSM-G01)
+      let displayName = realItemMap[pn] || pn;
+      
+      const badge = hasData
+        ? '<span class="part-badge parsed">Parsed</span>'
+        : '<span class="part-badge missing">No Data</span>';
+      
+      let bodyHtml = '';
+      if (vars) {
+        // Priority variable keys to show (clean, relevant ones)
+        const priorityKeys = ['inches', 'pipe_size', 'spacing', 'box', 'qty', 'material'];
+        const shownKeys = new Set();
+        
+        // Show priority keys first
+        priorityKeys.forEach(k => {
+          if (vars[k] !== undefined && vars[k] !== null) {
+            shownKeys.add(k);
+            const cleanKey = k.replace(/_/g, ' ').toUpperCase();
+            bodyHtml += `<div class="var-row"><span class="var-label">${cleanKey}</span><span class="var-val">${vars[k]}</span></div>`;
+          }
+        });
+        
+        // Then show any remaining non-extra, non-duplicate keys
+        Object.entries(vars).forEach(([k, v]) => {
+          if (!shownKeys.has(k) && !k.startsWith('extra_') && k !== 'galvanized') {
+            const cleanKey = k.replace(/_/g, ' ').toUpperCase();
+            bodyHtml += `<div class="var-row"><span class="var-label">${cleanKey}</span><span class="var-val">${v}</span></div>`;
+          }
+        });
+      } else {
+        bodyHtml = '<div style="padding:4px 0;font-size:0.75rem;color:var(--text-muted);">Not yet parsed from table data.</div>';
+      }
+      
+      card.innerHTML = `
+        <div class="part-card-header">
+          <span class="part-title">${displayName}</span>
+          ${badge}
+        </div>
+        <div class="part-card-body">${bodyHtml}</div>
+      `;
+      content.appendChild(card);
+    });
+    
+  } catch(e) {
+    showToast('Failed to load data: ' + e.message, 'red');
+  }
+}
+
+// ── Approve / Reject ──
+async function approveCurrent() {
+  if(!currentDoc) return;
+  await fetch('/api/approve', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({doc_id: currentDoc, status: 'approved'})
+  });
+  showToast('✅ Cutout & Parses Approved', 'green');
+  advanceDoc();
+}
+
+async function rejectCurrent() {
+  if(!currentDoc) return;
+  await fetch('/api/reject', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({doc_id: currentDoc, status: 'rejected'})
+  });
+  showToast('✗ Cutout Rejected', 'red');
+  advanceDoc();
+}
+
+function advanceDoc() {
+  const sel = document.getElementById('doc-select');
+  const idx = sel.selectedIndex;
+  if (idx < sel.options.length - 1) {
+    sel.selectedIndex = idx + 1;
+    loadDocument(sel.value);
+  } else {
+    showToast('All documents reviewed!', 'cyan');
+  }
+}
+
+function showToast(msg, color) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = `var(--signal-${color})`;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+
+window.onload = init;
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SVBL UI Payload Schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "Part Number": { "type": "string", "minLength": 1 },
+      "Manufacturer": { "type": "string" },
+      "Physical Page": { "type": ["string", "integer"] },
+      "x0": { "type": ["string", "number"] },
+      "y0": { "type": ["string", "number"] },
+      "x1": { "type": ["string", "number"] },
+      "y1": { "type": ["string", "number"] }
+    },
+    "required": ["Part Number", "Manufacturer", "Physical Page", "x0", "y0", "x1", "y1"],
+    "additionalProperties": false
+  }
+}

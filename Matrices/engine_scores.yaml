@@ -1,0 +1,22 @@
+# Engine Scores — Per-engine accuracy tracking
+# Updated by judge_orchestrator.py after each consensus run
+# Format: engine -> { total_matches, correct, incorrect, accuracy }
+engines:
+  tesseract:
+    total_matches: 0
+    correct: 0
+    incorrect: 0
+    accuracy: 0.0
+    weight: 1.0
+  pymupdf:
+    total_matches: 0
+    correct: 0
+    incorrect: 0
+    accuracy: 0.0
+    weight: 1.0
+  liteparse:
+    total_matches: 0
+    correct: 0
+    incorrect: 0
+    accuracy: 0.0
+    weight: 1.0

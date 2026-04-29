@@ -1,0 +1,13 @@
+ui_layout:
+  theme: "glassmorphism_dark"
+  font: "Inter"
+  primary_color: "#38bdf8"
+  bg_panel: "#1a1d24"
+
+data_bindings:
+  - catalog_name: "Dynamic Input Engine"
+    source_folder: "_1 INPUT FOLDER"
+    source_csv: "Everflow_Master_Parsed.csv"
+
+output_paths:
+  life_hive_ingestion: "_00 Raw Base Data/_2 Life-Hive Ingestion Packets"

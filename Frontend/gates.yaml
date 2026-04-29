@@ -1,0 +1,68 @@
+# Sovereign Spec UI - Build Gates Tracker
+# Tracks all tasks for the UI redesign
+# Status: PENDING | IN_PROGRESS | COMPLETE | BLOCKED
+
+project: "Sovereign Spec UI - TLS Redesign"
+version: "1.1.0"
+created: "2026-04-25"
+
+gates:
+  G1_DESIGN:
+    name: "Design System Lock-In"
+    status: "COMPLETE"
+    description: "Create design.md with Stainless Steel Future Ship aesthetic"
+    artifacts: ["Frontend/design.md"]
+
+  G2_BACKEND:
+    name: "Backend API Refactor"
+    status: "COMPLETE"
+    description: "Add per-match approve/reject endpoints with state tracking"
+    artifacts: ["Engines/ui_server.py"]
+
+  G3_FRONTEND:
+    name: "Frontend TLS Build"
+    status: "COMPLETE"
+    description: "Rebuild index.html with 3-column compartment layout"
+    artifacts: ["Frontend/index.html"]
+
+  G4_COUNTERS:
+    name: "Remaining vs Approved Counters"
+    status: "COMPLETE"
+    description: "Live counters showing remaining items vs approved items per page"
+    artifacts: ["Frontend/index.html"]
+
+  G5_APPROVE_REMOVE:
+    name: "Approve Removes From Set"
+    status: "COMPLETE"
+    description: "Approved items are removed from the active set and counter decrements"
+    artifacts: ["Engines/ui_server.py", "Frontend/index.html"]
+
+  G6_REJECT_CORRECT:
+    name: "Reject With Notes + Correction Loop"
+    status: "COMPLETE"
+    description: "Rejected items generate correction prompt for agent resubmission"
+    artifacts: ["Engines/ui_server.py"]
+
+  G7_CORRECTION_AGENT:
+    name: "Scaffold Correction Agent"
+    status: "COMPLETE"
+    description: "Scaffold spec-sheet-correction-Agent via /agent-skill-gates"
+    artifacts: ["spec-sheet-correction_request.yaml"]
+
+  G8_LAUNCH:
+    name: "Launch and Verify"
+    status: "COMPLETE"
+    description: "Start server, open browser, verify all flows"
+    artifacts: []
+
+  G9_GITHUB:
+    name: "GitHub Lock-In"
+    status: "COMPLETE"
+    description: "Commit design.md and gates.yaml to repo"
+    artifacts: []
+
+  G10_STATIC_PAGES:
+    name: "Static GitHub Pages Hosting"
+    status: "COMPLETE"
+    description: "Dual-mode UI (Flask/Pages) + Static PDF exporter + File watcher for push"
+    artifacts: ["Engines/static_exporter.py", "Engines/pxr_watcher.ps1", ".nojekyll"]

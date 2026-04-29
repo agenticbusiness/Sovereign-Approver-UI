@@ -1,0 +1,24 @@
+# Sovereign Deployment Manifest
+# System: TLS Spec Validation UI
+# Dumb-Reader Severance Logic: TRUE
+# All downstream agents MUST use these paths strictly. DO NOT infer.
+
+deployment:
+  app_name: "TLS-Spec-Validation-UI"
+  target_repo: "FileOS-HASM/TLS-Spec-Validation-UI"
+  infrastructure: "VPS (Hostinger srv1) + Nginx Docker"
+  routing:
+    domain: "tls-spec.fileos.cloud"
+    internal_port: 80
+  
+sync_bridge:
+  method: "Dropbox Active Folder Sync"
+  source_path: "./Frontend/"
+  target_vps_path: "/root/Dropbox/VPN_FileOS_TLS_Spec"
+
+commands:
+  post_sync_reboot: "docker exec vector_vpn_router nginx -s reload"
+
+telemetry:
+  evolution_ledger: "C:\\_0 SH-WF-Global gemini.md\\_1 Dashboards\\evolution_ledger.yaml"
+  sync_agent: "deployment-sync-auditor-Agent"

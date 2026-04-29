@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TLS - Parse to Copy</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --hull-base:#0a0c10;--hull-panel:#11141a;--hull-elevated:#181c25;
+  --steel-border:#2a3040;--steel-bright:#3d4558;
+  --text-primary:#e8ecf2;--text-secondary:#8893a7;--text-muted:#4e5a72;
+  --signal-cyan:#00d4ff;--signal-green:#00e68a;--signal-amber:#ffb84d;--signal-red:#ff4d6a;
+}
+* {margin:0;padding:0;box-sizing:border-box;}
+body {font-family:'Inter',sans-serif;background:var(--hull-base);color:var(--text-primary);min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;}
+
+.navbar {background:var(--hull-panel);border-bottom:1px solid var(--steel-border);padding:12px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;backdrop-filter:blur(10px);}
+.brand {display:flex;align-items:center;gap:12px;}
+.brand .dot {width:8px;height:8px;border-radius:50%;background:var(--signal-cyan);box-shadow:0 0 8px var(--signal-cyan);}
+.brand span {font-size:0.85rem;letter-spacing:3px;text-transform:uppercase;font-weight:600;color:var(--text-secondary);}
+.nav-links {display:flex;gap:16px;}
+.nav-link {color:var(--text-secondary);text-decoration:none;font-size:0.75rem;text-transform:uppercase;letter-spacing:1px;padding:6px 12px;border-radius:4px;border:1px solid transparent;transition:all 0.2s;}
+.nav-link:hover {color:var(--signal-cyan);border-color:var(--steel-border);background:var(--hull-elevated);}
+.nav-link.active {color:var(--signal-cyan);border-color:var(--steel-border);}
+
+.container {padding:24px 40px;width:100%;max-width:1600px;margin:0 auto;flex:1;display:flex;flex-direction:column;}
+.menu-bar {background:var(--hull-panel);border:1px solid var(--steel-border);border-radius:6px;padding:12px 16px;display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap;}
+.menu-bar select {background:var(--hull-base);color:var(--text-primary);border:1px solid var(--steel-border);border-radius:3px;padding:6px 10px;font-size:0.8rem;font-family:'Inter',sans-serif;min-width:300px;}
+.menu-bar select:focus {outline:none;border-color:var(--signal-cyan);}
+.nav-btn {background:transparent;color:var(--text-primary);border:1px solid var(--steel-border);border-radius:3px;padding:6px 10px;cursor:pointer;transition:all .15s;}
+.nav-btn:hover {background:var(--hull-elevated);border-color:var(--steel-bright);}
+.sync-status {display:flex;align-items:center;gap:8px;}
+
+.split-layout {display:grid;grid-template-columns:1fr 1fr;gap:24px;flex:1;min-height:0;}
+
+/* Left: Canvas */
+.page-panel {background:var(--hull-panel);border:1px solid var(--steel-border);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;}
+.panel-header {padding:12px 16px;border-bottom:1px solid var(--steel-border);display:flex;align-items:center;justify-content:space-between;}
+.panel-header h2 {font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;color:var(--text-secondary);font-weight:600;}
+.page-viewer {flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:12px;background:var(--hull-base);position:relative;}
+.canvas-wrap {position:relative;display:inline-block;max-width:100%;}
+.canvas-wrap img {max-width:100%;height:auto;border-radius:4px;border:1px solid var(--steel-border);display:block;user-select:none;-webkit-user-drag:none;}
+.canvas-wrap canvas {position:absolute;top:0;left:0;cursor:crosshair;}
+.select-rect {position:absolute;border:2px dashed var(--signal-cyan);background:rgba(0,212,255,0.08);pointer-events:none;z-index:5;}
+
+/* Right: Crops List */
+.crops-panel {display:flex;flex-direction:column;overflow:hidden;}
+.crops-header {background:var(--hull-panel);border:1px solid var(--steel-border);border-radius:8px 8px 0 0;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:none;}
+.crops-header h2 {font-size:0.85rem;text-transform:uppercase;letter-spacing:2px;color:var(--text-secondary);font-weight:600;}
+.crops-list {background:var(--hull-panel);border:1px solid var(--steel-border);border-top:none;border-radius:0 0 8px 8px;flex:1;overflow-y:auto;padding:8px;}
+
+.crop-item {display:flex;gap:12px;padding:10px;border:1px solid var(--steel-border);border-radius:6px;margin-bottom:8px;background:var(--hull-elevated);transition:border-color 0.2s;align-items:flex-start;}
+.crop-item:hover {border-color:var(--steel-bright);}
+.crop-thumb {width:80px;height:60px;object-fit:contain;border-radius:4px;border:1px solid var(--steel-border);background:var(--hull-base);flex-shrink:0;}
+.crop-info {flex:1;min-width:0;}
+.crop-text {font-size:0.72rem;color:var(--text-primary);font-family:'JetBrains Mono',monospace;background:var(--hull-base);padding:6px 8px;border-radius:3px;border:1px solid var(--steel-border);max-height:60px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;cursor:pointer;}
+.crop-text:hover {border-color:var(--signal-cyan);}
+.crop-meta {font-size:0.65rem;color:var(--text-muted);margin-top:4px;}
+.crop-actions {display:flex;gap:4px;margin-top:6px;}
+
+.btn {padding:5px 10px;border-radius:3px;font-size:0.68rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;border:1px solid;font-family:'Inter',sans-serif;transition:all 0.2s;}
+.btn-copy {background:transparent;color:var(--signal-cyan);border-color:rgba(0,212,255,0.3);}
+.btn-copy:hover {background:rgba(0,212,255,0.08);border-color:var(--signal-cyan);}
+.btn-dl {background:transparent;color:var(--signal-green);border-color:rgba(0,230,138,0.3);}
+.btn-dl:hover {background:rgba(0,230,138,0.08);border-color:var(--signal-green);}
+.btn-parse {background:var(--signal-cyan);color:#000;border-color:var(--signal-cyan);font-weight:700;}
+.btn-parse:hover {background:#33dfff;transform:translateY(-1px);}
+.btn-zip {background:var(--signal-amber);color:#000;border-color:var(--signal-amber);}
+.btn-zip:hover {background:#ffc766;}
+
+.mode-indicator {font-size:0.7rem;padding:4px 10px;border-radius:10px;font-family:'JetBrains Mono',monospace;}
+.mode-select {background:rgba(0,212,255,0.1);color:var(--signal-cyan);border:1px solid rgba(0,212,255,0.3);}
+.mode-idle {background:var(--hull-base);color:var(--text-muted);border:1px solid var(--steel-border);}
+
+.toast {position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:6px;font-size:0.8rem;font-weight:600;z-index:999;opacity:0;transform:translateY(10px);transition:all 0.3s;pointer-events:none;}
+.toast.show {opacity:1;transform:translateY(0);}
+.toast.success {background:var(--signal-green);color:#000;}
+.toast.error {background:var(--signal-red);color:#fff;}
+.toast.info {background:var(--signal-cyan);color:#000;}
+</style>
+</head>
+<body>
+
+<div class="navbar">
+    <div class="brand"><div class="dot"></div><span>Sovereign Pipeline UI</span></div>
+    <div class="nav-links">
+        <a href="index.html" class="nav-link">TLS Spec Validation</a>
+        <a href="data_flow.html" class="nav-link">Data Flow Dashboard</a>
+        <a href="inference_files.html" class="nav-link">Inference Files</a>
+        <a href="#" class="nav-link active">Parse to Copy</a>
+    </div>
+</div>
+
+<div class="container">
+    <div class="menu-bar">
+        <select id="doc-select" onchange="changeDocument(this.value)">
+            <option value="">Select Document...</option>
+        </select>
+        <div style="width:1px;height:24px;background:var(--steel-border);"></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <button class="nav-btn" onclick="changePage(-1)">←</button>
+            <input type="text" id="page-input" style="width:40px;text-align:center;background:var(--hull-base);color:var(--text-primary);border:1px solid var(--steel-border);border-radius:3px;padding:6px;font-size:0.8rem;font-family:'JetBrains Mono',monospace;" value="1" onchange="goToPage()">
+            <span style="color:var(--text-secondary);font-size:0.8rem;font-family:'JetBrains Mono',monospace;">/ <span id="total-pages">--</span></span>
+            <button class="nav-btn" onclick="changePage(1)">→</button>
+        </div>
+        <div style="width:1px;height:24px;background:var(--steel-border);"></div>
+        <div class="sync-status" id="sync-status">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--signal-amber)"></div>
+            <span style="color:var(--text-secondary)">No document synced.</span>
+        </div>
+        <div style="flex:1"></div>
+        <span class="mode-indicator mode-idle" id="mode-indicator">IDLE</span>
+        <button class="btn btn-parse" id="parse-btn-box" onclick="toggleSelectMode('box')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3" style="vertical-align:text-bottom;margin-right:4px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg> BOX PARSE
+        </button>
+        <button class="btn btn-parse" id="parse-btn-caret" onclick="toggleSelectMode('caret')" style="background:var(--signal-amber);border-color:var(--signal-amber);color:#000;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:text-bottom;margin-right:4px;"><path d="M12 4v16M8 4h8M8 20h8"/></svg> TEXT HIGHLIGHT
+        </button>
+        <button class="btn" id="parse-btn-cancel" onclick="cancelSelectMode()" style="display:none;background:var(--signal-red);border-color:var(--signal-red);color:#fff;">✕ CANCEL</button>
+    </div>
+
+    <div class="split-layout">
+        <div class="page-panel">
+            <div class="panel-header">
+                <h2>Snip Canvas</h2>
+                <span id="page-label" style="font-size:0.75rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace;">--</span>
+            </div>
+            <div class="page-viewer" id="page-viewer">
+                <div class="canvas-wrap" id="canvas-wrap">
+                    <img id="page-img" src="" alt="" style="display:none;" onload="onImageLoad()">
+                    <canvas id="select-canvas" style="display:none;"></canvas>
+                </div>
+                <span id="page-placeholder" style="color:var(--text-muted);font-size:0.85rem;">Select a document and page to begin parsing.</span>
+            </div>
+        </div>
+
+        <div class="crops-panel">
+            <div class="crops-header">
+                <h2>Parsed Items <span id="crop-count" style="color:var(--signal-cyan);font-size:0.7rem;font-family:'JetBrains Mono',monospace;margin-left:8px;">(0)</span></h2>
+                <button class="btn btn-zip" id="zip-btn" onclick="downloadZip()" style="display:none;">⬇ ZIP ALL</button>
+            </div>
+            <div class="crops-list" id="crops-list">
+                <div style="color:var(--text-muted);text-align:center;padding:40px;font-size:0.8rem;">
+                    No parsed items yet. Use ✂ SELECT REGION to begin snipping from the document.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let manifestDocs = [];
+let syncedDoc = null, syncedPage = '1', syncedTotalPages = '1';
+let selectMode = false;
+let extractionType = 'box';
+let isDrawing = false;
+let startX = 0, startY = 0, curX = 0, curY = 0;
+let crops = [];
+
+// ── Doc/Page sync ──
+function changeDocument(id) {
+    if (!id) return;
+    const doc = manifestDocs.find(d => d.id === id);
+    if (!doc) return;
+    syncedDoc = id; syncedPage = '1'; syncedTotalPages = String(doc.pages);
+    localStorage.setItem('sovereign_sync_doc', syncedDoc);
+    localStorage.setItem('sovereign_sync_page', syncedPage);
+    localStorage.setItem('sovereign_sync_total_pages', syncedTotalPages);
+    updateSyncUI(); renderPageImage(); loadCrops();
+}
+function changePage(d) {
+    if (!syncedDoc) return;
+    let p = parseInt(syncedPage) + d;
+    if (p < 1) p = 1; if (p > parseInt(syncedTotalPages)) p = parseInt(syncedTotalPages);
+    syncedPage = String(p);
+    localStorage.setItem('sovereign_sync_page', syncedPage);
+    document.getElementById('page-input').value = syncedPage;
+    renderPageImage();
+}
+function goToPage() {
+    const v = parseInt(document.getElementById('page-input').value);
+    if (!v || v < 1 || v > parseInt(syncedTotalPages)) return;
+    syncedPage = String(v);
+    localStorage.setItem('sovereign_sync_page', syncedPage);
+    renderPageImage();
+}
+function updateSyncUI() {
+    const ss = document.getElementById('sync-status');
+    document.getElementById('page-input').value = syncedPage;
+    document.getElementById('total-pages').textContent = syncedTotalPages;
+    if (syncedDoc) {
+        ss.innerHTML = `<div style="width:6px;height:6px;border-radius:50%;background:var(--signal-green);box-shadow:0 0 6px var(--signal-green)"></div><span style="color:var(--signal-green)">● Synced Active</span>`;
+    } else {
+        ss.innerHTML = `<div style="width:6px;height:6px;border-radius:50%;background:var(--signal-amber)"></div><span style="color:var(--text-secondary)">No document synced.</span>`;
+    }
+}
+function renderPageImage() {
+    const img = document.getElementById('page-img');
+    const ph = document.getElementById('page-placeholder');
+    const lbl = document.getElementById('page-label');
+    if (!syncedDoc || !syncedPage) { img.style.display='none'; ph.style.display='block'; return; }
+    ph.style.display = 'none'; img.style.display = 'block';
+    const isLocal = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+    if (isLocal) {
+        img.src = `/api/page/${encodeURIComponent(syncedDoc)}/${syncedPage}`;
+    } else {
+        img.src = `_2 Output Data/${encodeURIComponent(syncedDoc)}/pages/${syncedPage}.png`;
+    }
+    lbl.textContent = `${syncedDoc} — Page ${syncedPage}`;
+}
+function onImageLoad() {
+    const img = document.getElementById('page-img');
+    const canvas = document.getElementById('select-canvas');
+    canvas.width = img.width; canvas.height = img.height;
+    canvas.style.width = img.width + 'px'; canvas.style.height = img.height + 'px';
+    if (selectMode) canvas.style.display = 'block';
+}
+
+// ── Cross-tab sync ──
+window.addEventListener('storage', (e) => {
+    if (['sovereign_sync_doc','sovereign_sync_page','sovereign_sync_total_pages'].includes(e.key)) {
+        syncedDoc = localStorage.getItem('sovereign_sync_doc');
+        syncedPage = localStorage.getItem('sovereign_sync_page');
+        syncedTotalPages = localStorage.getItem('sovereign_sync_total_pages');
+        document.getElementById('doc-select').value = syncedDoc || '';
+        updateSyncUI(); renderPageImage(); loadCrops();
+    }
+});
+
+// ── Select Mode ──
+function toggleSelectMode(type) {
+    if (selectMode && extractionType === type) {
+        cancelSelectMode();
+        return;
+    }
+    selectMode = true;
+    extractionType = type;
+    const mi = document.getElementById('mode-indicator');
+    const canvas = document.getElementById('select-canvas');
+    const btnBox = document.getElementById('parse-btn-box');
+    const btnCaret = document.getElementById('parse-btn-caret');
+    const btnCancel = document.getElementById('parse-btn-cancel');
+    
+    mi.className = 'mode-indicator mode-select'; 
+    mi.textContent = type === 'box' ? 'BOX MODE' : 'TEXT MODE';
+    canvas.style.display = 'block'; 
+    
+    btnBox.style.display = 'none';
+    btnCaret.style.display = 'none';
+    btnCancel.style.display = 'inline-block';
+    
+    if (type === 'caret') {
+        canvas.style.cursor = 'text';
+    } else {
+        canvas.style.cursor = 'crosshair';
+    }
+}
+
+function cancelSelectMode() {
+    selectMode = false;
+    const mi = document.getElementById('mode-indicator');
+    const canvas = document.getElementById('select-canvas');
+    const btnBox = document.getElementById('parse-btn-box');
+    const btnCaret = document.getElementById('parse-btn-caret');
+    const btnCancel = document.getElementById('parse-btn-cancel');
+    
+    mi.className = 'mode-indicator mode-idle'; mi.textContent = 'IDLE';
+    canvas.style.display = 'none'; 
+    btnBox.style.display = 'inline-block';
+    btnCaret.style.display = 'inline-block';
+    btnCancel.style.display = 'none';
+    const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+// ── Canvas Drawing ──
+const canvas = document.getElementById('select-canvas');
+canvas.addEventListener('mousedown', (e) => {
+    if (!selectMode) return;
+    isDrawing = true;
+    const r = canvas.getBoundingClientRect();
+    startX = e.clientX - r.left; startY = e.clientY - r.top;
+});
+canvas.addEventListener('mousemove', (e) => {
+    if (!isDrawing) return;
+    const r = canvas.getBoundingClientRect();
+    curX = e.clientX - r.left; curY = e.clientY - r.top;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Draw dimmed overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Clear the selected region
+    const sx = Math.min(startX, curX), sy = Math.min(startY, curY);
+    const sw = Math.abs(curX - startX), sh = Math.abs(curY - startY);
+    ctx.clearRect(sx, sy, sw, sh);
+    // Draw border
+    ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 2; ctx.setLineDash([6, 3]);
+    ctx.strokeRect(sx, sy, sw, sh);
+});
+canvas.addEventListener('mouseup', async (e) => {
+    if (!isDrawing) return;
+    isDrawing = false;
+    const r = canvas.getBoundingClientRect();
+    curX = e.clientX - r.left; curY = e.clientY - r.top;
+    const sx = Math.min(startX, curX), sy = Math.min(startY, curY);
+    const sw = Math.abs(curX - startX), sh = Math.abs(curY - startY);
+    if (sw < 10 || sh < 10) return; // too small
+    
+    // Convert display coords to natural image coords
+    const img = document.getElementById('page-img');
+    const scaleX = img.naturalWidth / img.width;
+    const scaleY = img.naturalHeight / img.height;
+    
+    const natX = sx * scaleX, natY = sy * scaleY;
+    const natW = sw * scaleX, natH = sh * scaleY;
+    
+    showToast('Parsing region...', 'info');
+    
+    try {
+        const res = await fetch('/api/crop', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ doc_id: syncedDoc, page_num: syncedPage, x: natX, y: natY, w: natW, h: natH, extraction_type: extractionType })
+        });
+        const data = await res.json();
+        if (data.success) {
+            crops.unshift({ crop_id: data.crop_id, image_b64: data.image_b64, text: data.text, doc_id: syncedDoc, page_num: syncedPage, timestamp: new Date().toISOString() });
+            renderCrops();
+            showToast('Region parsed!', 'success');
+        } else {
+            showToast('Parse failed: ' + (data.error || 'Unknown'), 'error');
+        }
+    } catch(err) {
+        showToast('Parse failed: ' + err.message, 'error');
+    }
+    
+    // Reset canvas
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    cancelSelectMode();
+});
+
+// ── Crops List ──
+async function loadCrops() {
+    if (!syncedDoc) return;
+    try {
+        const res = await fetch(`/api/crops/${encodeURIComponent(syncedDoc)}`);
+        crops = await res.json();
+        renderCrops();
+    } catch(e) { console.error('Failed to load crops', e); }
+}
+
+function renderCrops() {
+    const list = document.getElementById('crops-list');
+    const countEl = document.getElementById('crop-count');
+    const zipBtn = document.getElementById('zip-btn');
+    countEl.textContent = `(${crops.length})`;
+    zipBtn.style.display = crops.length > 0 ? 'inline-block' : 'none';
+    
+    if (crops.length === 0) {
+        list.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:40px;font-size:0.8rem;">No parsed items yet. Use ✂ SELECT REGION to begin snipping.</div>`;
+        return;
+    }
+    
+    list.innerHTML = crops.map((c, i) => `
+        <div class="crop-item">
+            <img class="crop-thumb" src="data:image/png;base64,${c.image_b64}" alt="crop ${i+1}">
+            <div class="crop-info">
+                ${c.text ? `<div class="crop-text" onclick="copyText(${i})" title="Click to copy text">${escapeHtml(c.text)}</div>` : `<div style="font-size:0.7rem;color:var(--text-muted);font-style:italic;">Image only (no text detected)</div>`}
+                <div class="crop-meta">Page ${c.page_num} · ${c.crop_id?.split('_').slice(0,2).join(' ') || ''}</div>
+                <div class="crop-actions">
+                    <button class="btn btn-copy" onclick="copyImage(${i})">📋 Copy Image</button>
+                    ${c.text ? `<button class="btn btn-copy" onclick="copyText(${i})">📝 Copy Text</button>` : ''}
+                    <button class="btn btn-dl" onclick="downloadCrop('${c.crop_id}')">⬇ Download</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function copyImage(idx) {
+    const c = crops[idx];
+    try {
+        const blob = await (await fetch(`data:image/png;base64,${c.image_b64}`)).blob();
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        showToast('Image copied to clipboard!', 'success');
+    } catch(e) { showToast('Copy failed: ' + e.message, 'error'); }
+}
+
+function copyText(idx) {
+    const c = crops[idx];
+    navigator.clipboard.writeText(c.text).then(() => showToast('Text copied!', 'success')).catch(e => showToast('Copy failed', 'error'));
+}
+
+function downloadCrop(cropId) {
+    window.open(`/api/crops/${encodeURIComponent(syncedDoc)}/download/${cropId}`, '_blank');
+}
+
+function downloadZip() {
+    if (!syncedDoc) return;
+    window.open(`/api/crops/${encodeURIComponent(syncedDoc)}/zip`, '_blank');
+}
+
+function escapeHtml(s) { if(!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = `toast show ${type}`;
+    setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+// ── Boot ──
+async function boot() {
+    const s = document.getElementById('doc-select');
+    const isLocal = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+    try {
+        let docs = [];
+        if (isLocal) {
+            const r = await fetch('/api/documents'); docs = await r.json();
+        } else {
+            const r = await fetch('_2 Output Data/manifest.json'); docs = await r.json();
+        }
+        manifestDocs = docs;
+        if (isLocal) {
+            docs.forEach(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.id + ' (' + d.pages + 'p)'; s.appendChild(o); });
+        } else {
+            docs.forEach(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.id; s.appendChild(o); });
+        }
+        
+        const savedDoc = localStorage.getItem('sovereign_sync_doc');
+        const savedPage = localStorage.getItem('sovereign_sync_page');
+        const savedTotal = localStorage.getItem('sovereign_sync_total_pages');
+        if (savedDoc && manifestDocs.some(d => d.id === savedDoc)) {
+            syncedDoc = savedDoc; syncedPage = savedPage || '1'; syncedTotalPages = savedTotal || '1';
+            s.value = savedDoc;
+        }
+        updateSyncUI(); renderPageImage();
+        if (syncedDoc && isLocal) loadCrops();
+    } catch(e) { console.error("Boot error:", e); }
+}
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+# ============================================================================
+# CCO-UPC SYNTHESIS MATRIX: InfoQ PDF Extraction vs Sovereign Grid Snipper
+# Phase 1 + Phase 2 Flattened Synthesis Array
+# ============================================================================
+
+# PHASE 1: MECHANICS MAPPER (AS-IS STATE)
+current_mechanics:
+  engine: "Grid/Column Snipper V6"
+  methodology: "PyMuPDF text stream clipping by x/y coordinates"
+  validation_state: "Binary (Approve/Reject)"
+  known_failure_modes:
+    - "Missing table rows due to lack of header-semantic keying"
+    - "Variables mapped to positional extra_N fields"
+    - "Zero fallback paths; partial extractions fail silently"
+
+# PHASE 2: ENGINEERING STANDARDS MAPPER (INFOQ TO-BE STATE)
+external_principles:
+  source: "InfoQ: Redesigning Banking PDF Table Extraction"
+  core_mandate_1: "PDF Extraction is a reliability problem, not a parser problem."
+  core_mandate_2: "Avoid single-strategy architectures (Stream vs Lattice vs OCR)."
+  core_mandate_3: "Never hide low confidence; require deterministic fallback routing."
+
+# PHASE 3: SYNTHESIS INJECTIONS (THE CCO-UPC MERGE)
+synthesis_injection_rules:
+  - rule_id: "SYN-001"
+    target: "Validation Scoring"
+    action: "Inject a 4-tier confidence scoring model before UI handoff."
+    tdd_pass_state: "confidence_score >= 0.88 triggers Auto-Pass."
+    
+  - rule_id: "SYN-002"
+    target: "Semantic Column Mapping"
+    action: "Inject Header Detection Gate to replace positional mapping."
+    tdd_pass_state: "Columns map strictly to predefined canonical schema (e.g. size_inches)."
+    
+  - rule_id: "SYN-003"
+    target: "Multi-Strategy Architecture"
+    action: "Run Lattice and Vision parsers in parallel with Stream parser."
+    fallback_route: "Manual Review Queue"
+
+# CCO-UPC GOVERNANCE GATES
+governance_enforcements:
+  hallucination_cross_reference:
+    status: "MANDATORY"
+    execution: "Compare all extracted part numbers against source Part[] array. Block if < 79% fuzzy match."
+  dumb_reader_severance:
+    status: "MANDATORY"
+    execution: "TLS Approver UI acts strictly as a visual loop. All extraction logic isolated to backend Python agents."

@@ -1,0 +1,18 @@
+explicit_column_headers:
+  - "PART"
+  - "PART #"
+  - "SIZE"
+  - "DESCRIPTION"
+
+geometry_locks:
+  # The bounding box logic: we rely on pdfplumber finding tables.
+  # We enforce that a valid table must have at least one column that matches explicit_column_headers.
+  table_rules:
+    require_headers: ["PART", "PART #"]
+
+forbidden_terms:
+  - "INNER MA"
+  - "INNER M"
+
+output_schema:
+  manufacturer: "Everflow"
